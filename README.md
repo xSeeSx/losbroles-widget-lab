@@ -32,7 +32,9 @@ Abre `http://localhost:4173/`.
 
 ## GitHub Pages
 
-Configura Pages con la rama `main` y la carpeta `/` como origen. La aplicacion usa rutas relativas y funciona servida desde la ruta de un repositorio, por ejemplo `/losbroles-widget-lab/`.
+URL publica: <https://xseesx.github.io/losbroles-widget-lab/>
+
+El despliegue automatico se ejecuta con GitHub Actions desde `.github/workflows/deploy-pages.yml` y publica la web completa desde la raiz del repositorio. La aplicacion usa rutas relativas y funciona servida desde la ruta de un repositorio, por ejemplo `/losbroles-widget-lab/`.
 
 ## Funcionamiento
 
@@ -49,4 +51,3 @@ Configura Pages con la rama `main` y la carpeta `/` como origen. La aplicacion u
 1. Crea una carpeta dentro de `widgets/`.
 2. Anade `widget.json`, `widget.html`, `widget.css`, `widget.js` y `fields.json`.
 3. Registra el widget en `widgets/registry.json`.
-
