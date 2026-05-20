@@ -1,0 +1,11 @@
+{
+  "id": "demo",
+  "name": "Demo widget",
+  "version": "0.1.0",
+  "description": "Widget demo minimo para probar carga, fields y eventos mock.",
+  "entry": "widget.html",
+  "styles": "widget.css",
+  "script": "widget.js",
+  "fields": "fields.json"
+}
+

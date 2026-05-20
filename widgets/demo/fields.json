@@ -1,0 +1,23 @@
+{
+  "title": {
+    "type": "text",
+    "label": "Title",
+    "value": "LosBroles demo alert"
+  },
+  "accentColor": {
+    "type": "color",
+    "label": "Accent color",
+    "value": "#22c55e"
+  },
+  "showCounter": {
+    "type": "checkbox",
+    "label": "Show counter",
+    "value": true
+  },
+  "maxEvents": {
+    "type": "number",
+    "label": "Max events",
+    "value": 5
+  }
+}
+

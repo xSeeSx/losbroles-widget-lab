@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "widgets": [
+    {
+      "id": "demo",
+      "name": "Demo widget",
+      "description": "Widget minimo para validar eventos mock de StreamElements.",
+      "path": "widgets/demo/widget.json"
+    }
+  ]
+}
+
