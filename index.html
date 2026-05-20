@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>LosBroles Widget Lab</title>
+    <link rel="stylesheet" href="src/styles.css">
+    <script type="module" src="src/app.js"></script>
+  </head>
+  <body>
+    <header class="app-header">
+      <div>
+        <p class="eyebrow">StreamElements / Twitch sandbox</p>
+        <h1>LosBroles Widget Lab</h1>
+      </div>
+      <div id="appStatus" class="status-pill" role="status">Inicializando</div>
+    </header>
+
+    <main class="lab-layout">
+      <aside class="control-panel" aria-label="Controles del laboratorio">
+        <section class="panel-section">
+          <label class="field-label" for="widgetSelect">Widget</label>
+          <select id="widgetSelect" class="select-input"></select>
+          <div id="widgetMeta" class="meta-block"></div>
+        </section>
+
+        <section class="panel-section button-stack" aria-label="Acciones">
+          <button id="reloadWidgetButton" type="button">Reload widget</button>
+          <button id="emitWidgetLoadButton" type="button">Emit onWidgetLoad</button>
+          <button id="emitEventButton" type="button">Emit onEventReceived</button>
+          <button id="clearLogsButton" type="button" class="secondary-button">Clear logs</button>
+        </section>
+
+        <section class="panel-section">
+          <label class="field-label" for="eventPayload">Event payload</label>
+          <textarea id="eventPayload" class="payload-input" spellcheck="false"></textarea>
+        </section>
+
+        <section class="panel-section">
+          <h2>Fields</h2>
+          <dl id="fieldsList" class="fields-list"></dl>
+        </section>
+      </aside>
+
+      <section class="preview-column" aria-label="Previsualizacion">
+        <div class="preview-shell">
+          <iframe id="widgetFrame" title="Widget preview" sandbox="allow-scripts"></iframe>
+        </div>
+
+        <section class="console-panel" aria-label="Consola">
+          <div class="console-header">
+            <h2>Console</h2>
+            <span id="logCount" class="log-count">0 logs</span>
+          </div>
+          <ol id="logList" class="log-list"></ol>
+        </section>
+      </section>
+    </main>
+  </body>
+</html>
+
