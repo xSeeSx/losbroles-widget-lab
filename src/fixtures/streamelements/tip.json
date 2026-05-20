@@ -1,0 +1,13 @@
+{
+  "listener": "tip-latest",
+  "event": {
+    "name": "DemoTipper",
+    "displayName": "DemoTipper",
+    "amount": 5,
+    "currency": "EUR",
+    "message": "Para probar alertas sin directo",
+    "createdAt": "2026-05-20T09:25:00.000Z",
+    "type": "tip"
+  }
+}
+

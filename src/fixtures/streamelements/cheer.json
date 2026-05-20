@@ -1,0 +1,13 @@
+{
+  "listener": "cheer-latest",
+  "event": {
+    "name": "DemoCheerer",
+    "displayName": "DemoCheerer",
+    "providerId": "mock-user-cheer-001",
+    "amount": 250,
+    "message": "cheer250 Probando bits desde el mock",
+    "createdAt": "2026-05-20T09:30:00.000Z",
+    "type": "cheer"
+  }
+}
+

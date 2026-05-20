@@ -1,0 +1,25 @@
+{
+  "listener": "message",
+  "event": {
+    "service": "twitch",
+    "data": {
+      "time": "2026-05-20T09:10:00.000Z",
+      "tags": {
+        "badges": "subscriber/12,broadcaster/1",
+        "color": "#22c55e",
+        "display-name": "DemoChatter",
+        "mod": "0",
+        "subscriber": "1",
+        "turbo": "0",
+        "user-id": "mock-user-chat-001",
+        "user-type": ""
+      },
+      "nick": "demochatter",
+      "userId": "mock-user-chat-001",
+      "displayName": "DemoChatter",
+      "text": "Hola LosBroles, este mensaje viene del mock",
+      "renderedText": "Hola LosBroles, este mensaje viene del mock"
+    }
+  }
+}
+

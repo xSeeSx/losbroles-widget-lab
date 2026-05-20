@@ -1,0 +1,11 @@
+{
+  "listener": "follower-latest",
+  "event": {
+    "name": "DemoFollower",
+    "displayName": "DemoFollower",
+    "providerId": "mock-user-follow-001",
+    "createdAt": "2026-05-20T09:15:00.000Z",
+    "type": "follow"
+  }
+}
+

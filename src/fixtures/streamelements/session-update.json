@@ -1,0 +1,20 @@
+{
+  "session": {
+    "data": {
+      "follower-total": {
+        "count": 1285
+      },
+      "subscriber-total": {
+        "count": 77
+      },
+      "tip-total": {
+        "amount": 440.25,
+        "currency": "EUR"
+      },
+      "cheer-total": {
+        "amount": 18700
+      }
+    }
+  }
+}
+

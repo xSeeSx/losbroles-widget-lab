@@ -1,0 +1,16 @@
+{
+  "listener": "subscriber-latest",
+  "event": {
+    "name": "DemoSubscriber",
+    "displayName": "DemoSubscriber",
+    "providerId": "mock-user-sub-001",
+    "amount": 1,
+    "tier": "1000",
+    "gifted": false,
+    "sender": null,
+    "message": "12 meses con la comunidad",
+    "createdAt": "2026-05-20T09:20:00.000Z",
+    "type": "subscriber"
+  }
+}
+

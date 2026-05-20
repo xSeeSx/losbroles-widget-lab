@@ -8,6 +8,7 @@ Laboratorio estatico para probar widgets de StreamElements y Twitch sin emitir e
 /index.html
 /src/app.js
 /src/styles.css
+/src/fixtures/streamelements/
 /src/harness/se-mock.js
 /src/harness/twitch-eventsub-mock.js
 /src/harness/worker-mock.js
@@ -43,8 +44,28 @@ El despliegue automatico se ejecuta con GitHub Actions desde `.github/workflows/
 - El laboratorio lee `widget.html`, `widget.css`, `widget.js` y `fields.json`.
 - El iframe se construye con `srcdoc` y `sandbox="allow-scripts"`.
 - Los mocks de `src/harness/` se inyectan antes de ejecutar el JavaScript del widget.
-- Los botones emiten `onWidgetLoad` y `onEventReceived` como eventos mock de StreamElements.
+- Los botones emiten payloads mock de StreamElements: `onWidgetLoad`, chat message, follow, subscriber, tip, cheer y `kvstore:update`.
+- El editor JSON muestra el payload del ultimo boton usado. Edita el JSON y pulsa el mismo boton para reenviarlo con cambios.
+- La validacion JSON aparece en pantalla y bloquea el envio cuando el payload no es valido.
 - La consola en pantalla recibe logs del laboratorio y del widget aislado.
+
+## Mock de StreamElements
+
+`src/harness/se-mock.js` expone dentro del iframe:
+
+- `window.SE_API.store.get(key)`
+- `window.SE_API.store.set(key, value)`
+- `window.SE_API.sanitize(message)`
+- `window.SE_API.cheerFilter(message)`
+- `window.SE_API.counters.get(counter)`
+- `window.SE_API.setField(key, value)`
+- `window.emitSEWidgetLoad({ fieldData, channel, session, recents, currency })`
+- `window.emitSEEventReceived({ listener, event })`
+- `window.emitSESessionUpdate({ session })`
+
+Los eventos se entregan con `window.addEventListener("onWidgetLoad", handler)`, `window.addEventListener("onEventReceived", handler)` y `window.addEventListener("onSessionUpdate", handler)`, usando `event.detail` como en widgets reales. El canal de prueba usa `username: "losbroles"` y `apiToken: "fake-api-token-never-real"`.
+
+Los payloads de ejemplo estan en `src/fixtures/streamelements/`.
 
 ## Crear widgets
 

@@ -7,14 +7,52 @@ const HARNESS_URLS = [
   new URL("./harness/worker-mock.js", import.meta.url)
 ];
 
-const DEFAULT_EVENT_PAYLOAD = {
-  listener: "follower-latest",
-  event: {
-    name: "DemoFollower",
-    displayName: "DemoFollower",
-    providerId: "mock-user-001",
-    amount: 1,
-    message: "Hola desde el laboratorio"
+const SE_FIXTURE_URLS = {
+  widgetLoad: new URL("./fixtures/streamelements/widget-load.json", import.meta.url),
+  chatMessage: new URL("./fixtures/streamelements/chat-message.json", import.meta.url),
+  follow: new URL("./fixtures/streamelements/follow.json", import.meta.url),
+  subscriber: new URL("./fixtures/streamelements/subscriber.json", import.meta.url),
+  tip: new URL("./fixtures/streamelements/tip.json", import.meta.url),
+  cheer: new URL("./fixtures/streamelements/cheer.json", import.meta.url),
+  kvstoreUpdate: new URL("./fixtures/streamelements/kvstore-update.json", import.meta.url),
+  sessionUpdate: new URL("./fixtures/streamelements/session-update.json", import.meta.url)
+};
+
+const SE_ACTIONS = {
+  widgetLoad: {
+    label: "onWidgetLoad",
+    fixture: "widgetLoad",
+    mockAction: "widgetLoad"
+  },
+  chatMessage: {
+    label: "chat message",
+    fixture: "chatMessage",
+    mockAction: "eventReceived"
+  },
+  follow: {
+    label: "follow",
+    fixture: "follow",
+    mockAction: "eventReceived"
+  },
+  subscriber: {
+    label: "subscriber",
+    fixture: "subscriber",
+    mockAction: "eventReceived"
+  },
+  tip: {
+    label: "tip",
+    fixture: "tip",
+    mockAction: "eventReceived"
+  },
+  cheer: {
+    label: "cheer",
+    fixture: "cheer",
+    mockAction: "eventReceived"
+  },
+  kvstoreUpdate: {
+    label: "kvstore:update",
+    fixture: "kvstoreUpdate",
+    mockAction: "eventReceived"
   }
 };
 
@@ -25,6 +63,9 @@ const state = {
   selectedManifestUrl: null,
   fieldsSchema: {},
   fieldData: {},
+  seFixtures: {},
+  activePayloadType: "widgetLoad",
+  payloadDrafts: {},
   logCount: 0
 };
 
@@ -38,6 +79,7 @@ async function init() {
   writeLog("info", "lab", "Inicializando laboratorio");
 
   try {
+    await loadSEFixtures();
     await loadRegistry();
     setStatus("Listo");
   } catch (error) {
@@ -51,10 +93,11 @@ function bindElements() {
   elements.widgetSelect = document.querySelector("#widgetSelect");
   elements.widgetMeta = document.querySelector("#widgetMeta");
   elements.reloadButton = document.querySelector("#reloadWidgetButton");
-  elements.emitWidgetLoadButton = document.querySelector("#emitWidgetLoadButton");
-  elements.emitEventButton = document.querySelector("#emitEventButton");
+  elements.seActionButtons = Array.from(document.querySelectorAll("[data-se-action]"));
   elements.clearLogsButton = document.querySelector("#clearLogsButton");
   elements.eventPayload = document.querySelector("#eventPayload");
+  elements.payloadError = document.querySelector("#payloadError");
+  elements.payloadTypeLabel = document.querySelector("#payloadTypeLabel");
   elements.fieldsList = document.querySelector("#fieldsList");
   elements.frame = document.querySelector("#widgetFrame");
   elements.logList = document.querySelector("#logList");
@@ -72,8 +115,17 @@ function bindEvents() {
     }
   });
 
-  elements.emitWidgetLoadButton.addEventListener("click", emitWidgetLoad);
-  elements.emitEventButton.addEventListener("click", emitEventReceived);
+  for (const button of elements.seActionButtons) {
+    button.addEventListener("click", () => {
+      handleSEAction(button.dataset.seAction);
+    });
+  }
+
+  elements.eventPayload.addEventListener("input", () => {
+    state.payloadDrafts[state.activePayloadType] = elements.eventPayload.value;
+    validatePayloadEditor();
+  });
+
   elements.clearLogsButton.addEventListener("click", clearLogs);
   elements.frame.addEventListener("load", () => {
     if (state.selectedWidget) {
@@ -82,6 +134,14 @@ function bindEvents() {
   });
 
   window.addEventListener("message", handleWidgetMessage);
+}
+
+async function loadSEFixtures() {
+  const entries = await Promise.all(
+    Object.entries(SE_FIXTURE_URLS).map(async ([key, url]) => [key, await fetchJson(url)])
+  );
+
+  state.seFixtures = Object.fromEntries(entries);
 }
 
 async function loadRegistry() {
@@ -145,7 +205,7 @@ async function loadWidget(widgetId) {
 
     renderWidgetMeta(widget, manifest);
     renderFields(fieldsSchema, state.fieldData);
-    setDefaultEventPayload();
+    resetPayloadDrafts();
     renderIframe({ manifest, html, css, script, fieldsSchema, fieldData: state.fieldData, harnessScripts });
 
     setStatus(`Cargado: ${manifest.name || widget.name || widget.id}`);
@@ -201,6 +261,99 @@ function renderFields(fieldsSchema, fieldData) {
     row.append(term, detail);
     elements.fieldsList.append(row);
   }
+}
+
+function resetPayloadDrafts() {
+  const nextActiveType = SE_ACTIONS[state.activePayloadType] ? state.activePayloadType : "widgetLoad";
+  state.payloadDrafts = {};
+
+  for (const key of Object.keys(SE_ACTIONS)) {
+    state.payloadDrafts[key] = stringifyPayload(buildSEPayload(key));
+  }
+
+  setActivePayload(nextActiveType);
+}
+
+function buildSEPayload(actionKey) {
+  const action = SE_ACTIONS[actionKey];
+  const fixture = cloneJson(state.seFixtures[action.fixture] || {});
+
+  if (actionKey === "widgetLoad") {
+    fixture.fieldData = cloneJson(state.fieldData);
+    fixture.widget = {
+      id: state.selectedManifest?.id || state.selectedWidget?.id || "demo",
+      name: state.selectedManifest?.name || state.selectedWidget?.name || "Demo widget",
+      version: state.selectedManifest?.version || "0.1.0"
+    };
+  }
+
+  return fixture;
+}
+
+function setActivePayload(actionKey) {
+  state.activePayloadType = actionKey;
+  elements.eventPayload.value = state.payloadDrafts[actionKey] || stringifyPayload(buildSEPayload(actionKey));
+  elements.payloadTypeLabel.textContent = SE_ACTIONS[actionKey].label;
+
+  for (const button of elements.seActionButtons) {
+    button.classList.toggle("is-active", button.dataset.seAction === actionKey);
+  }
+
+  validatePayloadEditor();
+}
+
+function handleSEAction(actionKey) {
+  if (!SE_ACTIONS[actionKey]) {
+    writeLog("error", "lab", `Accion StreamElements no soportada: ${actionKey}`);
+    return;
+  }
+
+  state.payloadDrafts[state.activePayloadType] = elements.eventPayload.value;
+
+  if (state.activePayloadType !== actionKey) {
+    setActivePayload(actionKey);
+  }
+
+  const payload = parsePayloadEditor();
+
+  if (!payload) {
+    return;
+  }
+
+  state.payloadDrafts[actionKey] = stringifyPayload(payload);
+  emitSEPayload(actionKey, payload);
+}
+
+function validatePayloadEditor() {
+  try {
+    JSON.parse(elements.eventPayload.value);
+    clearPayloadError();
+    return true;
+  } catch (error) {
+    setPayloadError(`JSON invalido: ${error.message}`);
+    return false;
+  }
+}
+
+function parsePayloadEditor() {
+  try {
+    clearPayloadError();
+    return JSON.parse(elements.eventPayload.value);
+  } catch (error) {
+    setPayloadError(`JSON invalido: ${error.message}`);
+    writeLog("error", "lab", "Payload JSON no valido", error);
+    return null;
+  }
+}
+
+function setPayloadError(message) {
+  elements.payloadError.textContent = message;
+  elements.payloadError.hidden = false;
+}
+
+function clearPayloadError() {
+  elements.payloadError.textContent = "";
+  elements.payloadError.hidden = true;
 }
 
 function renderIframe({ manifest, html, css, script, fieldsSchema, fieldData, harnessScripts }) {
@@ -326,43 +479,9 @@ function buildIframeDocument({ manifest, html, css, script, fieldsSchema, fieldD
 </html>`;
 }
 
-function emitWidgetLoad() {
-  if (!state.selectedWidget) {
-    return;
-  }
-
-  emitToWidget("onWidgetLoad", {
-    fieldData: state.fieldData,
-    widget: {
-      id: state.selectedManifest?.id || state.selectedWidget.id,
-      name: state.selectedManifest?.name || state.selectedWidget.name
-    },
-    channel: {
-      id: "mock-channel",
-      username: "losbroles",
-      displayName: "LosBroles"
-    },
-    session: {
-      data: {}
-    }
-  });
-}
-
-function emitEventReceived() {
-  let payload;
-
-  try {
-    payload = JSON.parse(elements.eventPayload.value);
-  } catch (error) {
-    writeLog("error", "lab", "Event payload no es JSON valido", error);
-    return;
-  }
-
-  emitToWidget("onEventReceived", payload);
-}
-
-function emitToWidget(eventName, detail) {
+function emitSEPayload(actionKey, payload) {
   const frameWindow = elements.frame.contentWindow;
+  const action = SE_ACTIONS[actionKey];
 
   if (!frameWindow) {
     writeLog("error", "lab", "Iframe no disponible");
@@ -371,12 +490,12 @@ function emitToWidget(eventName, detail) {
 
   frameWindow.postMessage({
     source: LAB_SOURCE,
-    type: "LAB_EMIT",
-    eventName,
-    detail
+    type: "SE_MOCK_EMIT",
+    action: action.mockAction,
+    payload
   }, "*");
 
-  writeLog("info", "lab", `Emitido ${eventName}`, detail);
+  writeLog("info", "lab", `Emitido ${action.label}`, payload);
 }
 
 function handleWidgetMessage(event) {
@@ -435,10 +554,6 @@ function updateLogCount() {
 
 function setStatus(message) {
   elements.status.textContent = message;
-}
-
-function setDefaultEventPayload() {
-  elements.eventPayload.value = JSON.stringify(DEFAULT_EVENT_PAYLOAD, null, 2);
 }
 
 function extractFieldData(fieldsSchema) {
@@ -505,6 +620,10 @@ function formatFieldValue(value) {
   return JSON.stringify(value);
 }
 
+function stringifyPayload(payload) {
+  return JSON.stringify(payload, null, 2);
+}
+
 function stringifyLogData(data) {
   if (data instanceof Error) {
     return JSON.stringify({
@@ -519,6 +638,10 @@ function stringifyLogData(data) {
   } catch (error) {
     return String(data);
   }
+}
+
+function cloneJson(value) {
+  return JSON.parse(JSON.stringify(value));
 }
 
 function escapeHtml(value) {

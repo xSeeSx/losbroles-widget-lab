@@ -26,14 +26,23 @@
 
         <section class="panel-section button-stack" aria-label="Acciones">
           <button id="reloadWidgetButton" type="button">Reload widget</button>
-          <button id="emitWidgetLoadButton" type="button">Emit onWidgetLoad</button>
-          <button id="emitEventButton" type="button">Emit onEventReceived</button>
+          <button id="emitWidgetLoadButton" type="button" data-se-action="widgetLoad">onWidgetLoad</button>
+          <button id="emitChatMessageButton" type="button" data-se-action="chatMessage">chat message</button>
+          <button id="emitFollowButton" type="button" data-se-action="follow">follow</button>
+          <button id="emitSubscriberButton" type="button" data-se-action="subscriber">subscriber</button>
+          <button id="emitTipButton" type="button" data-se-action="tip">tip</button>
+          <button id="emitCheerButton" type="button" data-se-action="cheer">cheer</button>
+          <button id="emitKvStoreButton" type="button" data-se-action="kvstoreUpdate">kvstore:update</button>
           <button id="clearLogsButton" type="button" class="secondary-button">Clear logs</button>
         </section>
 
         <section class="panel-section">
-          <label class="field-label" for="eventPayload">Event payload</label>
+          <div class="payload-heading">
+            <label class="field-label" for="eventPayload">StreamElements payload JSON</label>
+            <span id="payloadTypeLabel" class="payload-type">onWidgetLoad</span>
+          </div>
           <textarea id="eventPayload" class="payload-input" spellcheck="false"></textarea>
+          <div id="payloadError" class="payload-error" role="alert" hidden></div>
         </section>
 
         <section class="panel-section">
@@ -58,4 +67,3 @@
     </main>
   </body>
 </html>
-

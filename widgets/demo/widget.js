@@ -30,12 +30,14 @@
 
   function appendEvent(payload = {}) {
     const event = payload.event || {};
+    const data = event.data || {};
     const listener = payload.listener || "unknown-listener";
-    const displayName = event.displayName || event.name || "Anonymous";
+    const displayName = event.displayName || event.name || data.displayName || data.nick || "Anonymous";
     const amount = typeof event.amount === "number" ? ` x${event.amount}` : "";
+    const text = event.message || data.text || "";
     const item = document.createElement("li");
 
-    item.textContent = `${listener}: ${displayName}${amount}`;
+    item.textContent = `${listener}: ${displayName}${amount}${text ? ` - ${text}` : ""}`;
     events.prepend(item);
 
     while (events.children.length > state.maxEvents) {
@@ -57,8 +59,11 @@
     console.info("onEventReceived received", event.detail);
   });
 
+  window.addEventListener("onSessionUpdate", (event) => {
+    console.info("onSessionUpdate received", event.detail);
+  });
+
   if (typeof window.__LAB_LOG__ === "function") {
     window.__LAB_LOG__("info", "Demo widget script ready");
   }
 })();
-

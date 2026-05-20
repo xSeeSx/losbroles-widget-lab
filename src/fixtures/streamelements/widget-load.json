@@ -1,0 +1,48 @@
+{
+  "fieldData": {},
+  "channel": {
+    "id": "mock-channel-id",
+    "providerId": "mock-twitch-channel-id",
+    "username": "losbroles",
+    "displayName": "LosBroles",
+    "apiToken": "fake-api-token-never-real",
+    "avatar": "https://static-cdn.jtvnw.net/jtv_user_pictures/mock-profile_image-70x70.png"
+  },
+  "session": {
+    "data": {
+      "follower-total": {
+        "count": 1284
+      },
+      "subscriber-total": {
+        "count": 76
+      },
+      "tip-total": {
+        "amount": 435.25,
+        "currency": "EUR"
+      },
+      "cheer-total": {
+        "amount": 18450
+      }
+    }
+  },
+  "recents": [
+    {
+      "type": "follower-latest",
+      "name": "DemoFollower",
+      "createdAt": "2026-05-20T09:00:00.000Z"
+    },
+    {
+      "type": "tip-latest",
+      "name": "DemoTipper",
+      "amount": 5,
+      "currency": "EUR",
+      "createdAt": "2026-05-20T09:05:00.000Z"
+    }
+  ],
+  "currency": {
+    "code": "EUR",
+    "symbol": "EUR",
+    "name": "Euro"
+  }
+}
+
