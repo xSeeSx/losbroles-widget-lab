@@ -110,8 +110,8 @@ const state = {
   debugEntries: [],
   debugMode: true,
   responsive: {
-    preset: "800x200",
-    zoom: 1,
+    preset: "1280x720",
+    zoom: 0.75,
     background: "gray"
   },
   seFixtures: {},

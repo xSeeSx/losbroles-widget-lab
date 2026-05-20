@@ -50,7 +50,7 @@ El despliegue automatico se ejecuta con GitHub Actions desde `.github/workflows/
 - Los mocks de `src/harness/` se inyectan antes de ejecutar el JavaScript del widget.
 - El boton `Validate widgets` comprueba campos obligatorios y que los archivos declarados cargan correctamente.
 - El modo Debug captura logs del iframe, `console.log`, `console.warn`, `console.error` y errores JS cuando el navegador expone stack.
-- El modo Responsive permite presets `1920x1080`, `1280x720`, `960x240`, `800x200`, zoom visual y fondos transparente, gris, chroma y oscuro.
+- El modo Responsive permite presets `1920x1080`, `1280x720`, `960x240`, `800x200`, zoom visual y fondos transparente, gris, chroma y oscuro. El laboratorio arranca en `1280x720` al `75%` para dejar mas area visible del widget.
 - La pantalla `Import widget` permite pegar HTML, CSS, JS y `fields JSON`, previsualizar sin guardar, descargar un paquete y copiar la estructura de carpeta.
 - La seccion `Chat simulator` emula mensajes de Twitch dentro del formato de chat de StreamElements.
 - Los botones emiten payloads mock de StreamElements: `onWidgetLoad`, chat message, follow, subscriber, tip, cheer y `kvstore:update`.
