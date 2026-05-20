@@ -31,6 +31,62 @@
           <ol id="validationResults" class="validation-results"></ol>
         </section>
 
+        <section class="panel-section import-panel" aria-label="Import widget">
+          <h2>Import widget</h2>
+
+          <div class="import-grid">
+            <label>
+              <span class="field-label">id</span>
+              <input id="importWidgetId" class="text-input" type="text" placeholder="my-widget">
+            </label>
+            <label>
+              <span class="field-label">name</span>
+              <input id="importWidgetName" class="text-input" type="text" placeholder="My widget">
+            </label>
+            <label>
+              <span class="field-label">width</span>
+              <input id="importWidgetWidth" class="text-input" type="number" min="1" step="1" value="800">
+            </label>
+            <label>
+              <span class="field-label">height</span>
+              <input id="importWidgetHeight" class="text-input" type="number" min="1" step="1" value="200">
+            </label>
+          </div>
+
+          <label>
+            <span class="field-label">description</span>
+            <textarea id="importWidgetDescription" class="text-area-input" rows="3" placeholder="Descripcion breve del widget"></textarea>
+          </label>
+
+          <label>
+            <span class="field-label">HTML</span>
+            <textarea id="importWidgetHtml" class="code-input" spellcheck="false" placeholder="&lt;div id=&quot;widget&quot;&gt;...&lt;/div&gt;"></textarea>
+          </label>
+
+          <label>
+            <span class="field-label">CSS</span>
+            <textarea id="importWidgetCss" class="code-input" spellcheck="false" placeholder=".widget { ... }"></textarea>
+          </label>
+
+          <label>
+            <span class="field-label">JS</span>
+            <textarea id="importWidgetJs" class="code-input" spellcheck="false" placeholder="window.addEventListener('onWidgetLoad', (event) =&gt; { ... });"></textarea>
+          </label>
+
+          <label>
+            <span class="field-label">fields JSON</span>
+            <textarea id="importWidgetFields" class="code-input code-input-short" spellcheck="false">{}</textarea>
+          </label>
+
+          <div class="button-stack">
+            <button id="importPreviewButton" type="button">Preview without saving</button>
+            <button id="importDownloadButton" type="button" class="secondary-button">Download widget package</button>
+            <button id="importCopyStructureButton" type="button" class="secondary-button">Copy folder structure</button>
+          </div>
+
+          <div id="importStatus" class="import-status" role="status">Pega archivos y previsualiza sin guardar.</div>
+        </section>
+
         <section class="panel-section debug-panel" aria-label="Debug del widget">
           <h2>Debug</h2>
           <label class="toggle-row">

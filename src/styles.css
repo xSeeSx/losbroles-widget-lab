@@ -144,7 +144,9 @@ textarea:focus-visible {
 
 .select-input,
 .text-input,
-.payload-input {
+.payload-input,
+.text-area-input,
+.code-input {
   width: 100%;
   border: 1px solid var(--line);
   border-radius: 6px;
@@ -162,6 +164,13 @@ textarea:focus-visible {
   padding: 0 10px;
 }
 
+.text-area-input {
+  min-height: 72px;
+  resize: vertical;
+  padding: 10px;
+  line-height: 1.4;
+}
+
 .payload-input {
   min-height: 178px;
   resize: vertical;
@@ -169,6 +178,19 @@ textarea:focus-visible {
   font-family: "Cascadia Mono", Consolas, monospace;
   font-size: 0.83rem;
   line-height: 1.45;
+}
+
+.code-input {
+  min-height: 132px;
+  resize: vertical;
+  padding: 11px;
+  font-family: "Cascadia Mono", Consolas, monospace;
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.code-input-short {
+  min-height: 104px;
 }
 
 .button-stack {
@@ -325,10 +347,45 @@ textarea:focus-visible {
 }
 
 .validation-panel,
+.import-panel,
 .debug-panel,
 .responsive-panel {
   border-top: 1px solid var(--line);
   padding-top: 16px;
+}
+
+.import-panel label {
+  display: grid;
+  gap: 6px;
+}
+
+.import-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.import-status {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 650;
+  line-height: 1.35;
+  padding: 8px 10px;
+}
+
+.import-status.import-ok {
+  border-color: rgba(15, 143, 140, 0.36);
+  background: rgba(15, 143, 140, 0.08);
+  color: var(--accent-strong);
+}
+
+.import-status.import-error {
+  border-color: rgba(180, 35, 24, 0.32);
+  background: rgba(180, 35, 24, 0.08);
+  color: var(--danger);
 }
 
 .validation-summary {
@@ -588,6 +645,10 @@ textarea:focus-visible {
   .control-panel,
   .preview-shell {
     padding: 14px;
+  }
+
+  .import-grid {
+    grid-template-columns: 1fr;
   }
 
   .log-entry {

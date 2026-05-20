@@ -87,11 +87,16 @@ const SE_ACTIONS = {
   }
 };
 
+const IMPORT_ID_PATTERN = /^[a-z0-9][a-z0-9-]*$/;
+const IMPORT_PREVIEW_OPTION_VALUE = "__import_preview__";
+const CRC32_TABLE = createCrc32Table();
+
 const state = {
   widgets: [],
   selectedWidget: null,
   selectedManifest: null,
   selectedManifestUrl: null,
+  importPreview: null,
   registry: null,
   fieldsSchema: {},
   fieldData: {},
@@ -149,6 +154,19 @@ function bindElements() {
   elements.validateWidgetsButton = document.querySelector("#validateWidgetsButton");
   elements.validationSummary = document.querySelector("#validationSummary");
   elements.validationResults = document.querySelector("#validationResults");
+  elements.importWidgetId = document.querySelector("#importWidgetId");
+  elements.importWidgetName = document.querySelector("#importWidgetName");
+  elements.importWidgetDescription = document.querySelector("#importWidgetDescription");
+  elements.importWidgetWidth = document.querySelector("#importWidgetWidth");
+  elements.importWidgetHeight = document.querySelector("#importWidgetHeight");
+  elements.importWidgetHtml = document.querySelector("#importWidgetHtml");
+  elements.importWidgetCss = document.querySelector("#importWidgetCss");
+  elements.importWidgetJs = document.querySelector("#importWidgetJs");
+  elements.importWidgetFields = document.querySelector("#importWidgetFields");
+  elements.importPreviewButton = document.querySelector("#importPreviewButton");
+  elements.importDownloadButton = document.querySelector("#importDownloadButton");
+  elements.importCopyStructureButton = document.querySelector("#importCopyStructureButton");
+  elements.importStatus = document.querySelector("#importStatus");
   elements.debugModeToggle = document.querySelector("#debugModeToggle");
   elements.copyDebugReportButton = document.querySelector("#copyDebugReportButton");
   elements.viewportPresetSelect = document.querySelector("#viewportPresetSelect");
@@ -194,10 +212,17 @@ function bindElements() {
 
 function bindEvents() {
   elements.widgetSelect.addEventListener("change", () => {
+    if (elements.widgetSelect.value === IMPORT_PREVIEW_OPTION_VALUE) {
+      return;
+    }
+
     loadWidget(elements.widgetSelect.value);
   });
 
   elements.validateWidgetsButton.addEventListener("click", validateWidgets);
+  elements.importPreviewButton.addEventListener("click", previewImportedWidget);
+  elements.importDownloadButton.addEventListener("click", downloadImportedWidgetPackage);
+  elements.importCopyStructureButton.addEventListener("click", copyImportedFolderStructure);
   elements.debugModeToggle.addEventListener("change", () => {
     state.debugMode = elements.debugModeToggle.checked;
     applyDebugMode();
@@ -217,6 +242,11 @@ function bindEvents() {
   });
 
   elements.reloadButton.addEventListener("click", () => {
+    if (state.importPreview) {
+      previewImportedWidget();
+      return;
+    }
+
     if (state.selectedWidget) {
       loadWidget(state.selectedWidget.id);
     }
@@ -439,6 +469,290 @@ function renderWidgetOptions() {
   }
 }
 
+function showImportPreviewOption(manifest) {
+  let option = elements.widgetSelect.querySelector(`option[value="${IMPORT_PREVIEW_OPTION_VALUE}"]`);
+
+  if (!option) {
+    option = document.createElement("option");
+    option.value = IMPORT_PREVIEW_OPTION_VALUE;
+    option.disabled = true;
+    elements.widgetSelect.prepend(option);
+  }
+
+  option.textContent = `Import preview: ${manifest.name || manifest.id}`;
+  elements.widgetSelect.value = IMPORT_PREVIEW_OPTION_VALUE;
+}
+
+function clearImportPreviewOption() {
+  elements.widgetSelect.querySelector(`option[value="${IMPORT_PREVIEW_OPTION_VALUE}"]`)?.remove();
+}
+
+async function previewImportedWidget() {
+  let draft;
+
+  try {
+    draft = readImportDraft();
+  } catch (error) {
+    setImportStatus(error.message, "error");
+    writeLog("error", "import", "Import widget no valido", error);
+    return;
+  }
+
+  setImportStatus("Preparando preview sin guardar...", "info");
+  setStatus("Preparando import preview");
+
+  try {
+    const harnessScripts = await Promise.all(HARNESS_URLS.map((url) => fetchText(url)));
+    const fieldData = extractFieldData(draft.fieldsSchema);
+
+    state.importPreview = draft;
+    state.selectedWidget = draft.manifest;
+    state.selectedManifest = draft.manifest;
+    state.selectedManifestUrl = null;
+    state.fieldsSchema = draft.fieldsSchema;
+    state.fieldData = fieldData;
+
+    renderWidgetMeta(draft.manifest);
+    showImportPreviewOption(draft.manifest);
+    renderFields(draft.fieldsSchema, fieldData);
+    resetPayloadDrafts();
+    renderIframe({
+      manifest: draft.manifest,
+      html: draft.html,
+      css: draft.css,
+      script: draft.script,
+      fieldsSchema: draft.fieldsSchema,
+      fieldData,
+      harnessScripts
+    });
+    applyPreviewDimensions(draft.manifest.width, draft.manifest.height, state.responsive.zoom);
+
+    setStatus(`Import preview: ${draft.manifest.name}`);
+    setImportStatus("Preview generado. No se ha guardado nada en GitHub ni en el repo.", "ok");
+    writeLog("info", "import", `Preview importado sin guardar: ${draft.manifest.id}`, {
+      id: draft.manifest.id,
+      size: `${draft.manifest.width}x${draft.manifest.height}`,
+      files: draft.files.map((file) => file.path)
+    });
+  } catch (error) {
+    setStatus("Error en import preview");
+    setImportStatus(`No se pudo crear el preview: ${error.message}`, "error");
+    writeLog("error", "import", "Error al previsualizar widget importado", error);
+  }
+}
+
+function downloadImportedWidgetPackage() {
+  let draft;
+
+  try {
+    draft = readImportDraft();
+  } catch (error) {
+    setImportStatus(error.message, "error");
+    writeLog("error", "import", "No se pudo generar el paquete", error);
+    return;
+  }
+
+  try {
+    const blob = createZipBlob(draft.files);
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+
+    link.href = url;
+    link.download = `${draft.manifest.id}-widget-package.zip`;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+
+    setImportStatus("Paquete descargado. Extraelo en el repo y commitea los archivos para guardarlo de verdad.", "ok");
+    writeLog("info", "import", `Paquete generado: ${link.download}`, {
+      files: draft.files.map((file) => file.path)
+    });
+  } catch (error) {
+    setImportStatus(`No se pudo descargar el paquete: ${error.message}`, "error");
+    writeLog("error", "import", "Error al descargar paquete de widget", error);
+  }
+}
+
+async function copyImportedFolderStructure() {
+  let draft;
+
+  try {
+    draft = readImportDraft();
+  } catch (error) {
+    setImportStatus(error.message, "error");
+    writeLog("error", "import", "No se pudo copiar la estructura", error);
+    return;
+  }
+
+  const structure = buildImportFolderStructure(draft);
+
+  try {
+    await copyTextToClipboard(structure);
+    setImportStatus("Estructura copiada. Anade esos archivos al repo y commitea para persistir.", "ok");
+    writeLog("info", "import", `Estructura copiada: widgets/${draft.manifest.id}/`, {
+      registryEntry: draft.manifest
+    });
+  } catch (error) {
+    window.__LAST_IMPORT_FOLDER_STRUCTURE__ = structure;
+    setImportStatus("El navegador bloqueo la copia automatica. La estructura queda en __LAST_IMPORT_FOLDER_STRUCTURE__.", "error");
+    writeLog("warn", "import", "Estructura generada; copia automatica bloqueada", {
+      error: serializeLogData(error),
+      structure
+    });
+  }
+}
+
+function readImportDraft() {
+  const errors = [];
+  const id = elements.importWidgetId.value.trim();
+  const name = elements.importWidgetName.value.trim();
+  const description = elements.importWidgetDescription.value.trim();
+  const width = parseImportDimension(elements.importWidgetWidth.value, "width", errors);
+  const height = parseImportDimension(elements.importWidgetHeight.value, "height", errors);
+  const html = elements.importWidgetHtml.value;
+  const css = elements.importWidgetCss.value;
+  const script = elements.importWidgetJs.value;
+  const fieldsRaw = elements.importWidgetFields.value.trim() || "{}";
+  let fieldsSchema = {};
+
+  if (!id) {
+    errors.push("id es obligatorio.");
+  } else if (!IMPORT_ID_PATTERN.test(id)) {
+    errors.push("id solo puede usar minusculas, numeros y guiones, empezando por letra o numero.");
+  }
+
+  if (!name) {
+    errors.push("name es obligatorio.");
+  }
+
+  try {
+    fieldsSchema = JSON.parse(fieldsRaw);
+
+    if (!fieldsSchema || (typeof fieldsSchema !== "object" && !Array.isArray(fieldsSchema))) {
+      errors.push("fields JSON debe ser un objeto o array JSON.");
+    }
+  } catch (error) {
+    errors.push(`fields JSON invalido: ${error.message}`);
+  }
+
+  if (errors.length > 0) {
+    throw new Error(errors.join(" "));
+  }
+
+  const manifest = buildImportedWidgetManifest({
+    id,
+    name,
+    description,
+    width,
+    height
+  });
+  const draft = {
+    manifest,
+    html,
+    css,
+    script,
+    fieldsSchema
+  };
+
+  return {
+    ...draft,
+    files: buildImportedWidgetFiles(draft)
+  };
+}
+
+function parseImportDimension(value, label, errors) {
+  const parsed = Number.parseInt(value, 10);
+
+  if (!Number.isFinite(parsed) || parsed < 1) {
+    errors.push(`${label} debe ser un numero positivo.`);
+    return 1;
+  }
+
+  return parsed;
+}
+
+function buildImportedWidgetManifest({ id, name, description, width, height }) {
+  return {
+    id,
+    name,
+    description: description || "Widget importado manualmente.",
+    version: "0.1.0",
+    author: "manual-import",
+    category: "imported",
+    width,
+    height,
+    html: `widgets/${id}/widget.html`,
+    css: `widgets/${id}/widget.css`,
+    js: `widgets/${id}/widget.js`,
+    fields: `widgets/${id}/fields.json`,
+    mocks: `widgets/${id}/mocks/index.json`,
+    notes: "Generado con Import widget. Para persistirlo, commitea estos archivos y registra la entrada en widgets/registry.json."
+  };
+}
+
+function buildImportedWidgetFiles(draft) {
+  const basePath = `widgets/${draft.manifest.id}`;
+  const mocks = {
+    events: [],
+    notes: "Empty mocks index generated by Import widget."
+  };
+
+  return [
+    {
+      path: `${basePath}/widget.json`,
+      content: `${stringifyPayload(draft.manifest)}\n`
+    },
+    {
+      path: `${basePath}/widget.html`,
+      content: ensureTrailingNewline(draft.html)
+    },
+    {
+      path: `${basePath}/widget.css`,
+      content: ensureTrailingNewline(draft.css)
+    },
+    {
+      path: `${basePath}/widget.js`,
+      content: ensureTrailingNewline(draft.script)
+    },
+    {
+      path: `${basePath}/fields.json`,
+      content: `${stringifyPayload(draft.fieldsSchema)}\n`
+    },
+    {
+      path: `${basePath}/mocks/index.json`,
+      content: `${stringifyPayload(mocks)}\n`
+    }
+  ];
+}
+
+function buildImportFolderStructure(draft) {
+  return [
+    `widgets/${draft.manifest.id}/`,
+    "  widget.json",
+    "  widget.html",
+    "  widget.css",
+    "  widget.js",
+    "  fields.json",
+    "  mocks/",
+    "    index.json",
+    "",
+    "Registry entry to add in widgets/registry.json:",
+    stringifyPayload(draft.manifest),
+    "",
+    "Real persistence requires committing these files to the repository."
+  ].join("\n");
+}
+
+function ensureTrailingNewline(value) {
+  return value.endsWith("\n") ? value : `${value}\n`;
+}
+
+function setImportStatus(message, level = "info") {
+  elements.importStatus.textContent = message;
+  elements.importStatus.className = `import-status ${level === "ok" ? "import-ok" : ""} ${level === "error" ? "import-error" : ""}`.trim();
+}
+
 async function loadWidget(widgetId) {
   const widget = state.widgets.find((item) => item.id === widgetId);
 
@@ -451,6 +765,8 @@ async function loadWidget(widgetId) {
   state.selectedWidget = widget;
   state.selectedManifest = widget;
   state.selectedManifestUrl = REGISTRY_URL;
+  state.importPreview = null;
+  clearImportPreviewOption();
   elements.widgetSelect.value = widget.id;
 
   try {
@@ -635,16 +951,7 @@ async function copyDebugReport() {
   const report = buildDebugReport();
 
   try {
-    if (navigator.clipboard?.writeText) {
-      try {
-        await navigator.clipboard.writeText(report);
-      } catch (error) {
-        copyTextFallback(report);
-      }
-    } else {
-      copyTextFallback(report);
-    }
-
+    await copyTextToClipboard(report);
     writeLog("info", "lab", "Debug report copiado al portapapeles");
   } catch (error) {
     window.__LAST_DEBUG_REPORT__ = report;
@@ -653,6 +960,20 @@ async function copyDebugReport() {
       report
     });
   }
+}
+
+async function copyTextToClipboard(text) {
+  if (navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return;
+    } catch (error) {
+      copyTextFallback(text);
+      return;
+    }
+  }
+
+  copyTextFallback(text);
 }
 
 function copyTextFallback(text) {
@@ -691,13 +1012,20 @@ function applyResponsiveMode() {
   elements.zoomSelect.value = String(zoom);
   elements.previewBackgroundSelect.value = state.responsive.background;
 
+  applyPreviewDimensions(width, height, zoom);
+  applyPreviewBackground();
+}
+
+function applyPreviewDimensions(width, height, zoom) {
   elements.iframeViewport.style.width = `${width * zoom}px`;
   elements.iframeViewport.style.height = `${height * zoom}px`;
   elements.frame.style.width = `${width}px`;
   elements.frame.style.height = `${height}px`;
   elements.frame.style.transform = `scale(${zoom})`;
   elements.frame.style.transformOrigin = "top left";
+}
 
+function applyPreviewBackground() {
   elements.previewShell.classList.remove("preview-bg-transparent", "preview-bg-gray", "preview-bg-chroma", "preview-bg-dark");
   elements.previewShell.classList.add(`preview-bg-${state.responsive.background}`);
 }
@@ -1565,6 +1893,115 @@ function serializeLogData(data) {
 
 function cloneJson(value) {
   return JSON.parse(JSON.stringify(value));
+}
+
+function createZipBlob(files) {
+  const encoder = new TextEncoder();
+  const localParts = [];
+  const centralParts = [];
+  const { date, time } = getZipDosDateTime(new Date());
+  let offset = 0;
+
+  for (const file of files) {
+    const nameBytes = encoder.encode(file.path.replaceAll("\\", "/"));
+    const dataBytes = encoder.encode(file.content);
+    const crc = crc32(dataBytes);
+    const localOffset = offset;
+    const localHeader = new Uint8Array(30 + nameBytes.length);
+    const localView = new DataView(localHeader.buffer);
+
+    localView.setUint32(0, 0x04034b50, true);
+    localView.setUint16(4, 20, true);
+    localView.setUint16(6, 0, true);
+    localView.setUint16(8, 0, true);
+    localView.setUint16(10, time, true);
+    localView.setUint16(12, date, true);
+    localView.setUint32(14, crc, true);
+    localView.setUint32(18, dataBytes.length, true);
+    localView.setUint32(22, dataBytes.length, true);
+    localView.setUint16(26, nameBytes.length, true);
+    localView.setUint16(28, 0, true);
+    localHeader.set(nameBytes, 30);
+
+    localParts.push(localHeader, dataBytes);
+    offset += localHeader.length + dataBytes.length;
+
+    const centralHeader = new Uint8Array(46 + nameBytes.length);
+    const centralView = new DataView(centralHeader.buffer);
+
+    centralView.setUint32(0, 0x02014b50, true);
+    centralView.setUint16(4, 20, true);
+    centralView.setUint16(6, 20, true);
+    centralView.setUint16(8, 0, true);
+    centralView.setUint16(10, 0, true);
+    centralView.setUint16(12, time, true);
+    centralView.setUint16(14, date, true);
+    centralView.setUint32(16, crc, true);
+    centralView.setUint32(20, dataBytes.length, true);
+    centralView.setUint32(24, dataBytes.length, true);
+    centralView.setUint16(28, nameBytes.length, true);
+    centralView.setUint16(30, 0, true);
+    centralView.setUint16(32, 0, true);
+    centralView.setUint16(34, 0, true);
+    centralView.setUint16(36, 0, true);
+    centralView.setUint32(38, 0, true);
+    centralView.setUint32(42, localOffset, true);
+    centralHeader.set(nameBytes, 46);
+    centralParts.push(centralHeader);
+  }
+
+  const centralSize = centralParts.reduce((total, part) => total + part.length, 0);
+  const centralOffset = offset;
+  const endRecord = new Uint8Array(22);
+  const endView = new DataView(endRecord.buffer);
+
+  endView.setUint32(0, 0x06054b50, true);
+  endView.setUint16(4, 0, true);
+  endView.setUint16(6, 0, true);
+  endView.setUint16(8, files.length, true);
+  endView.setUint16(10, files.length, true);
+  endView.setUint32(12, centralSize, true);
+  endView.setUint32(16, centralOffset, true);
+  endView.setUint16(20, 0, true);
+
+  return new Blob([...localParts, ...centralParts, endRecord], {
+    type: "application/zip"
+  });
+}
+
+function createCrc32Table() {
+  const table = new Uint32Array(256);
+
+  for (let index = 0; index < table.length; index += 1) {
+    let value = index;
+
+    for (let bit = 0; bit < 8; bit += 1) {
+      value = (value & 1) ? (0xedb88320 ^ (value >>> 1)) : (value >>> 1);
+    }
+
+    table[index] = value >>> 0;
+  }
+
+  return table;
+}
+
+function crc32(bytes) {
+  let crc = 0xffffffff;
+
+  for (const byte of bytes) {
+    crc = CRC32_TABLE[(crc ^ byte) & 0xff] ^ (crc >>> 8);
+  }
+
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+function getZipDosDateTime(dateValue) {
+  const year = Math.max(1980, dateValue.getFullYear());
+
+  return {
+    date: ((year - 1980) << 9) | ((dateValue.getMonth() + 1) << 5) | dateValue.getDate(),
+    time: (dateValue.getHours() << 11) | (dateValue.getMinutes() << 5) | Math.floor(dateValue.getSeconds() / 2)
+  };
 }
 
 function resolveWidgetUrl(path) {

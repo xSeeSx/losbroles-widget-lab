@@ -49,6 +49,7 @@ El despliegue automatico se ejecuta con GitHub Actions desde `.github/workflows/
 - El boton `Validate widgets` comprueba campos obligatorios y que los archivos declarados cargan correctamente.
 - El modo Debug captura logs del iframe, `console.log`, `console.warn`, `console.error` y errores JS cuando el navegador expone stack.
 - El modo Responsive permite presets `1920x1080`, `1280x720`, `960x240`, `800x200`, zoom visual y fondos transparente, gris, chroma y oscuro.
+- La pantalla `Import widget` permite pegar HTML, CSS, JS y `fields JSON`, previsualizar sin guardar, descargar un paquete y copiar la estructura de carpeta.
 - Los botones emiten payloads mock de StreamElements: `onWidgetLoad`, chat message, follow, subscriber, tip, cheer y `kvstore:update`.
 - El editor JSON muestra el payload del ultimo boton usado. Edita el JSON y pulsa el mismo boton para reenviarlo con cambios.
 - La validacion JSON aparece en pantalla y bloquea el envio cuando el payload no es valido.
@@ -153,6 +154,48 @@ Los mensajes de prediccion enviados por el mock del Worker usan el mismo contrat
 ```
 
 El validador del laboratorio comprueba campos obligatorios, dimensiones positivas y carga de `html`, `css`, `js`, `fields` y `mocks`. Los errores se muestran en pantalla.
+
+## Importador manual
+
+La pantalla `Import widget` crea un paquete local desde archivos pegados. No usa GitHub API, no escribe en el repositorio desde el navegador y no guarda nada de forma permanente.
+
+Campos disponibles:
+
+- `id`
+- `name`
+- `description`
+- `width`
+- `height`
+- `HTML`
+- `CSS`
+- `JS`
+- `fields JSON`
+
+Acciones:
+
+- `Preview without saving`: carga el widget pegado en el iframe con los mocks del laboratorio, sin modificar `widgets/registry.json`.
+- `Download widget package`: descarga un `.zip` con una carpeta lista para colocar en el repo.
+- `Copy folder structure`: copia el arbol esperado y una entrada de registry para usarla como referencia.
+
+El paquete generado incluye:
+
+```text
+widgets/{id}/widget.json
+widgets/{id}/widget.html
+widgets/{id}/widget.css
+widgets/{id}/widget.js
+widgets/{id}/fields.json
+widgets/{id}/mocks/index.json
+```
+
+Los cinco primeros archivos son la base compatible del widget. `mocks/index.json` se incluye vacio para que el widget pueda registrarse en el almacen actual y pasar `Validate widgets`.
+
+Para guardar de verdad un widget importado:
+
+1. Extrae el paquete dentro del repositorio.
+2. Anade la entrada generada a `widgets/registry.json`.
+3. Ejecuta `Validate widgets`.
+4. Haz commit y push de esos archivos.
 
 ## Crear widgets
 
