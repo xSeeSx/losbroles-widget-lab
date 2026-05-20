@@ -1,3 +1,9 @@
+import {
+  CHAT_USER_PROFILES,
+  buildSEChatMessage,
+  emitSEChatMessage
+} from "./harness/se-chat-mock.js";
+
 const LAB_SOURCE = "losbroles-widget-lab";
 const WIDGET_SOURCE = "losbroles-widget-lab-widget";
 const REGISTRY_URL = new URL("../widgets/registry.json", import.meta.url);
@@ -116,6 +122,12 @@ const state = {
     workerUrl: "",
     connectionLogCount: 0
   },
+  chat: {
+    lastPayload: null,
+    history: [],
+    pending: []
+  },
+  frameReady: false,
   activePayloadType: "widgetLoad",
   payloadDrafts: {},
   logCount: 0
@@ -127,6 +139,7 @@ document.addEventListener("DOMContentLoaded", init);
 
 async function init() {
   bindElements();
+  setupCollapsibleSections();
   bindEvents();
   writeLog("info", "lab", "Inicializando laboratorio");
 
@@ -137,6 +150,8 @@ async function init() {
     ]);
     renderPredictionControls();
     renderWorkerControls();
+    renderChatHistory();
+    renderChatPayload();
     applyDebugMode();
     applyResponsiveMode();
     await loadRegistry();
@@ -151,6 +166,18 @@ function bindElements() {
   elements.status = document.querySelector("#appStatus");
   elements.widgetSelect = document.querySelector("#widgetSelect");
   elements.widgetMeta = document.querySelector("#widgetMeta");
+  elements.chatMessageInput = document.querySelector("#chatMessageInput");
+  elements.chatProfileSelect = document.querySelector("#chatProfileSelect");
+  elements.chatSendStreamerButton = document.querySelector("#chatSendStreamerButton");
+  elements.chatSendViewerButton = document.querySelector("#chatSendViewerButton");
+  elements.chatSendActionButton = document.querySelector("#chatSendActionButton");
+  elements.chatEnterToggle = document.querySelector("#chatEnterToggle");
+  elements.chatParseEmotesToggle = document.querySelector("#chatParseEmotesToggle");
+  elements.chatBroadcastToggle = document.querySelector("#chatBroadcastToggle");
+  elements.chatCopyPayloadButton = document.querySelector("#chatCopyPayloadButton");
+  elements.chatHistoryCount = document.querySelector("#chatHistoryCount");
+  elements.chatHistoryList = document.querySelector("#chatHistoryList");
+  elements.chatLastPayload = document.querySelector("#chatLastPayload");
   elements.validateWidgetsButton = document.querySelector("#validateWidgetsButton");
   elements.validationSummary = document.querySelector("#validationSummary");
   elements.validationResults = document.querySelector("#validationResults");
@@ -218,6 +245,25 @@ function bindEvents() {
 
     loadWidget(elements.widgetSelect.value);
   });
+
+  elements.chatSendStreamerButton.addEventListener("click", () => {
+    sendChatMessage("streamer");
+  });
+  elements.chatSendViewerButton.addEventListener("click", () => {
+    sendChatMessage(elements.chatProfileSelect.value || "viewer");
+  });
+  elements.chatSendActionButton.addEventListener("click", () => {
+    sendChatMessage(elements.chatProfileSelect.value || "viewer", { isAction: true });
+  });
+  elements.chatMessageInput.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" || !elements.chatEnterToggle.checked) {
+      return;
+    }
+
+    event.preventDefault();
+    sendChatMessage(elements.chatProfileSelect.value || "viewer");
+  });
+  elements.chatCopyPayloadButton.addEventListener("click", copyLastChatPayload);
 
   elements.validateWidgetsButton.addEventListener("click", validateWidgets);
   elements.importPreviewButton.addEventListener("click", previewImportedWidget);
@@ -309,13 +355,180 @@ function bindEvents() {
 
   elements.clearLogsButton.addEventListener("click", clearLogs);
   elements.frame.addEventListener("load", () => {
+    state.frameReady = true;
+
     if (state.selectedWidget) {
       writeLog("info", "lab", `Iframe cargado: ${state.selectedWidget.id}`);
       sendWorkerConfig();
+      flushPendingChatMessages();
     }
   });
 
   window.addEventListener("message", handleWidgetMessage);
+}
+
+function setupCollapsibleSections() {
+  const sections = Array.from(document.querySelectorAll(".control-panel > .panel-section"));
+
+  sections.forEach((section) => {
+    if (section.dataset.collapsibleReady === "true") {
+      return;
+    }
+
+    const title = getPanelTitle(section);
+    const content = document.createElement("div");
+    const toggle = document.createElement("button");
+    const collapsed = section.dataset.startCollapsed === "true";
+
+    content.className = "panel-content";
+
+    while (section.firstChild) {
+      content.append(section.firstChild);
+    }
+
+    toggle.type = "button";
+    toggle.className = "panel-toggle";
+    toggle.setAttribute("aria-expanded", String(!collapsed));
+    toggle.textContent = title;
+    content.hidden = collapsed;
+    section.classList.toggle("is-collapsed", collapsed);
+    section.append(toggle, content);
+    section.dataset.collapsibleReady = "true";
+
+    toggle.addEventListener("click", () => {
+      const nextCollapsed = !content.hidden;
+      content.hidden = nextCollapsed;
+      section.classList.toggle("is-collapsed", nextCollapsed);
+      toggle.setAttribute("aria-expanded", String(!nextCollapsed));
+    });
+  });
+}
+
+function getPanelTitle(section) {
+  return section.dataset.panelTitle
+    || section.querySelector("h2")?.textContent?.trim()
+    || section.getAttribute("aria-label")
+    || section.querySelector(".field-label")?.textContent?.trim()
+    || "Panel";
+}
+
+function sendChatMessage(profileKey, options = {}) {
+  const text = elements.chatMessageInput.value.trim();
+
+  if (!text) {
+    writeLog("warn", "chat", "No se envio chat: mensaje vacio");
+    return;
+  }
+
+  const profile = CHAT_USER_PROFILES[profileKey] || CHAT_USER_PROFILES.viewer;
+  const payload = buildSEChatMessage({
+    text,
+    profile,
+    isAction: options.isAction === true,
+    parseEmotes: elements.chatParseEmotesToggle.checked
+  });
+  const broadcast = elements.chatBroadcastToggle.checked;
+  const modes = state.frameReady
+    ? deliverChatPayload(payload, broadcast)
+    : queueChatPayload(payload, broadcast);
+
+  state.chat.lastPayload = payload;
+  state.chat.history.unshift({
+    timestamp: new Date().toISOString(),
+    profile: profile.label,
+    text: payload.detail.event.data.text,
+    isAction: payload.detail.event.data.isAction,
+    emoteCount: payload.detail.event.data.emotes.length
+  });
+  state.chat.history = state.chat.history.slice(0, 30);
+
+  renderChatPayload();
+  renderChatHistory();
+  writeLog("info", "chat", "Chat message emitted as StreamElements onEventReceived", {
+    dispatchModes: modes,
+    targetCount: modes.length,
+    payload
+  });
+}
+
+function deliverChatPayload(payload, broadcast = false) {
+  const frames = broadcast
+    ? Array.from(document.querySelectorAll("iframe"))
+    : [elements.frame];
+  const modes = [];
+
+  for (const frame of frames) {
+    if (!frame?.contentWindow) {
+      continue;
+    }
+
+    modes.push(emitSEChatMessage(frame.contentWindow, payload));
+  }
+
+  return modes;
+}
+
+function queueChatPayload(payload, broadcast = false) {
+  state.chat.pending.push({ payload, broadcast });
+  return ["queued-until-iframe-load"];
+}
+
+function flushPendingChatMessages() {
+  if (state.chat.pending.length === 0) {
+    return;
+  }
+
+  const pending = state.chat.pending.splice(0);
+
+  for (const item of pending) {
+    const modes = deliverChatPayload(item.payload, item.broadcast);
+    writeLog("info", "chat", "Queued chat message emitted as StreamElements onEventReceived", {
+      dispatchModes: modes,
+      targetCount: modes.length,
+      payload: item.payload
+    });
+  }
+}
+
+async function copyLastChatPayload() {
+  if (!state.chat.lastPayload) {
+    writeLog("warn", "chat", "No hay payload de chat para copiar");
+    return;
+  }
+
+  try {
+    await copyTextToClipboard(stringifyPayload(state.chat.lastPayload));
+    writeLog("info", "chat", "Ultimo payload de chat copiado");
+  } catch (error) {
+    window.__LAST_CHAT_PAYLOAD__ = state.chat.lastPayload;
+    writeLog("warn", "chat", "Payload de chat generado; copia automatica bloqueada", {
+      error: serializeLogData(error),
+      payload: state.chat.lastPayload
+    });
+  }
+}
+
+function renderChatPayload() {
+  elements.chatLastPayload.value = state.chat.lastPayload
+    ? stringifyPayload(state.chat.lastPayload)
+    : "";
+}
+
+function renderChatHistory() {
+  elements.chatHistoryList.replaceChildren();
+  elements.chatHistoryCount.textContent = String(state.chat.history.length);
+
+  for (const item of state.chat.history) {
+    const row = document.createElement("li");
+    const title = document.createElement("strong");
+    const meta = document.createElement("span");
+
+    row.className = "chat-history-entry";
+    title.textContent = `${item.isAction ? "/me " : ""}${item.profile}`;
+    meta.textContent = `${item.text}${item.emoteCount ? ` (${item.emoteCount} emotes)` : ""}`;
+    row.append(title, meta);
+    elements.chatHistoryList.append(row);
+  }
 }
 
 async function loadSEFixtures() {
@@ -505,6 +718,7 @@ async function previewImportedWidget() {
     const harnessScripts = await Promise.all(HARNESS_URLS.map((url) => fetchText(url)));
     const fieldData = extractFieldData(draft.fieldsSchema);
 
+    state.frameReady = false;
     state.importPreview = draft;
     state.selectedWidget = draft.manifest;
     state.selectedManifest = draft.manifest;
@@ -762,6 +976,7 @@ async function loadWidget(widgetId) {
   }
 
   setStatus(`Cargando ${widget.name || widget.id}`);
+  state.frameReady = false;
   state.selectedWidget = widget;
   state.selectedManifest = widget;
   state.selectedManifestUrl = REGISTRY_URL;

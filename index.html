@@ -18,20 +18,73 @@
 
     <main class="lab-layout">
       <aside class="control-panel" aria-label="Controles del laboratorio">
-        <section class="panel-section">
+        <section class="panel-section" data-panel-title="Widget">
           <label class="field-label" for="widgetSelect">Widget</label>
           <select id="widgetSelect" class="select-input"></select>
           <div id="widgetMeta" class="meta-block"></div>
         </section>
 
-        <section class="panel-section validation-panel" aria-label="Validacion de widgets">
+        <section class="panel-section chat-panel" aria-label="Chat simulator" data-panel-title="Chat simulator">
+          <h2>Chat simulator</h2>
+
+          <label>
+            <span class="field-label">Mensaje</span>
+            <input id="chatMessageInput" class="text-input" type="text" value="hola Kappa test">
+          </label>
+
+          <label class="field-label" for="chatProfileSelect">Usuario</label>
+          <select id="chatProfileSelect" class="select-input">
+            <option value="streamer">Streamer</option>
+            <option value="viewer" selected>Viewer normal</option>
+            <option value="mod">Mod</option>
+            <option value="subscriber">Subscriber</option>
+          </select>
+
+          <div class="button-stack">
+            <button id="chatSendStreamerButton" type="button">Send as Los Broles</button>
+            <button id="chatSendViewerButton" type="button">Send as Viewer</button>
+            <button id="chatSendActionButton" type="button" class="secondary-button">Send action /me</button>
+          </div>
+
+          <label class="toggle-row">
+            <input id="chatEnterToggle" type="checkbox" checked>
+            <span>Enter sends message</span>
+          </label>
+
+          <label class="toggle-row">
+            <input id="chatParseEmotesToggle" type="checkbox" checked>
+            <span>Parse known Twitch emotes</span>
+          </label>
+
+          <label class="toggle-row">
+            <input id="chatBroadcastToggle" type="checkbox">
+            <span>Broadcast to all loaded widgets</span>
+          </label>
+
+          <button id="chatCopyPayloadButton" type="button" class="secondary-button">Copy last chat payload</button>
+
+          <div class="chat-history">
+            <div class="chat-history-header">
+              <h3>Historial</h3>
+              <span id="chatHistoryCount">0</span>
+            </div>
+            <ol id="chatHistoryList" class="chat-history-list"></ol>
+          </div>
+
+          <label>
+            <span class="field-label">Last chat payload JSON</span>
+            <textarea id="chatLastPayload" class="payload-input chat-payload-output" spellcheck="false" readonly></textarea>
+          </label>
+        </section>
+
+        <section class="panel-section validation-panel" aria-label="Validacion de widgets" data-panel-title="Widget Store" data-start-collapsed="true">
           <h2>Widget Store</h2>
           <button id="validateWidgetsButton" type="button">Validate widgets</button>
           <div id="validationSummary" class="validation-summary" role="status">Sin validar</div>
           <ol id="validationResults" class="validation-results"></ol>
         </section>
 
-        <section class="panel-section import-panel" aria-label="Import widget">
+        <section class="panel-section import-panel" aria-label="Import widget" data-panel-title="Import widget" data-start-collapsed="true">
           <h2>Import widget</h2>
 
           <div class="import-grid">
@@ -87,7 +140,7 @@
           <div id="importStatus" class="import-status" role="status">Pega archivos y previsualiza sin guardar.</div>
         </section>
 
-        <section class="panel-section debug-panel" aria-label="Debug del widget">
+        <section class="panel-section debug-panel" aria-label="Debug del widget" data-panel-title="Debug" data-start-collapsed="true">
           <h2>Debug</h2>
           <label class="toggle-row">
             <input id="debugModeToggle" type="checkbox" checked>
@@ -96,7 +149,7 @@
           <button id="copyDebugReportButton" type="button" class="secondary-button">Copy debug report</button>
         </section>
 
-        <section class="panel-section responsive-panel" aria-label="Responsive preview">
+        <section class="panel-section responsive-panel" aria-label="Responsive preview" data-panel-title="Responsive">
           <h2>Responsive</h2>
           <label class="field-label" for="viewportPresetSelect">Preset</label>
           <select id="viewportPresetSelect" class="select-input">
@@ -123,7 +176,7 @@
           </select>
         </section>
 
-        <section class="panel-section button-stack" aria-label="Acciones">
+        <section class="panel-section button-stack" aria-label="Acciones" data-panel-title="StreamElements events" data-start-collapsed="true">
           <button id="reloadWidgetButton" type="button">Reload widget</button>
           <button id="emitWidgetLoadButton" type="button" data-se-action="widgetLoad">onWidgetLoad</button>
           <button id="emitChatMessageButton" type="button" data-se-action="chatMessage">chat message</button>
@@ -135,7 +188,7 @@
           <button id="clearLogsButton" type="button" class="secondary-button">Clear logs</button>
         </section>
 
-        <section class="panel-section">
+        <section class="panel-section" data-panel-title="StreamElements payload JSON" data-start-collapsed="true">
           <div class="payload-heading">
             <label class="field-label" for="eventPayload">StreamElements payload JSON</label>
             <span id="payloadTypeLabel" class="payload-type">onWidgetLoad</span>
@@ -144,7 +197,7 @@
           <div id="payloadError" class="payload-error" role="alert" hidden></div>
         </section>
 
-        <section class="panel-section prediction-panel" aria-label="Twitch EventSub predicciones">
+        <section class="panel-section prediction-panel" aria-label="Twitch EventSub predicciones" data-panel-title="Twitch Predictions" data-start-collapsed="true">
           <h2>Twitch Predictions</h2>
           <label class="field-label" for="predictionTitle">Titulo</label>
           <input id="predictionTitle" class="text-input" type="text" value="Quien gana la siguiente ronda?">
@@ -178,7 +231,7 @@
           </div>
         </section>
 
-        <section class="panel-section worker-panel" aria-label="Cloudflare Worker mock">
+        <section class="panel-section worker-panel" aria-label="Cloudflare Worker mock" data-panel-title="Worker WebSocket" data-start-collapsed="true">
           <h2>Worker WebSocket</h2>
           <label class="toggle-row">
             <input id="workerInterceptToggle" type="checkbox" checked>
@@ -206,7 +259,7 @@
           </div>
         </section>
 
-        <section class="panel-section">
+        <section class="panel-section" data-panel-title="Fields" data-start-collapsed="true">
           <h2>Fields</h2>
           <dl id="fieldsList" class="fields-list"></dl>
         </section>

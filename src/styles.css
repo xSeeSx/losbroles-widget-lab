@@ -27,6 +27,7 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--ink);
+  overflow: hidden;
 }
 
 button,
@@ -74,7 +75,8 @@ textarea:focus-visible {
   align-items: center;
   justify-content: space-between;
   gap: 24px;
-  padding: 20px 24px;
+  min-height: 70px;
+  padding: 14px 24px;
   border-bottom: 1px solid var(--line);
   background: var(--surface);
 }
@@ -112,21 +114,70 @@ textarea:focus-visible {
 .lab-layout {
   display: grid;
   grid-template-columns: minmax(300px, 380px) minmax(0, 1fr);
-  min-height: calc(100vh - 82px);
+  height: calc(100vh - 70px);
+  min-height: 0;
 }
 
 .control-panel {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 10px;
+  min-height: 0;
   border-right: 1px solid var(--line);
   background: #fbfcfd;
+  overflow: auto;
   padding: 18px;
 }
 
 .panel-section {
   display: grid;
   gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 10px;
+}
+
+.panel-content {
+  display: grid;
+  gap: 10px;
+}
+
+.panel-content > h2:first-child {
+  display: none;
+}
+
+.panel-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 34px;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  padding: 0;
+  text-align: left;
+}
+
+.panel-toggle:hover {
+  background: transparent;
+  color: var(--accent-strong);
+}
+
+.panel-toggle::after {
+  content: "-";
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+}
+
+.is-collapsed .panel-toggle::after {
+  content: "+";
 }
 
 .panel-section h2,
@@ -299,6 +350,70 @@ textarea:focus-visible {
   min-height: 120px;
 }
 
+.chat-panel label {
+  display: grid;
+  gap: 6px;
+}
+
+.chat-history {
+  display: grid;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #ffffff;
+  min-height: 120px;
+}
+
+.chat-history-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border-bottom: 1px solid var(--line);
+  padding: 8px 10px;
+}
+
+.chat-history-header h3 {
+  margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.2;
+}
+
+.chat-history-header span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 750;
+}
+
+.chat-history-list {
+  display: grid;
+  gap: 6px;
+  max-height: 160px;
+  margin: 0;
+  overflow: auto;
+  padding: 0 10px 10px;
+}
+
+.chat-history-entry {
+  display: grid;
+  gap: 3px;
+  border-left: 3px solid var(--accent);
+  color: var(--ink);
+  font-size: 0.78rem;
+  line-height: 1.35;
+  list-style: none;
+  padding: 6px 0 6px 8px;
+}
+
+.chat-history-entry span {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.chat-payload-output {
+  min-height: 154px;
+}
+
 .worker-console-header {
   display: flex;
   align-items: center;
@@ -350,8 +465,7 @@ textarea:focus-visible {
 .import-panel,
 .debug-panel,
 .responsive-panel {
-  border-top: 1px solid var(--line);
-  padding-top: 16px;
+  border-top-color: var(--line);
 }
 
 .import-panel label {
@@ -485,7 +599,9 @@ textarea:focus-visible {
 
 .preview-column {
   display: grid;
-  grid-template-rows: minmax(320px, 1fr) minmax(180px, 32vh);
+  grid-template-rows: minmax(0, 1fr) minmax(148px, 24vh);
+  height: 100%;
+  min-height: 0;
   min-width: 0;
 }
 
@@ -627,12 +743,19 @@ textarea:focus-visible {
   }
 
   .lab-layout {
+    height: auto;
     grid-template-columns: 1fr;
+    min-height: calc(100vh - 70px);
+  }
+
+  body {
+    overflow: auto;
   }
 
   .control-panel {
     border-right: 0;
     border-bottom: 1px solid var(--line);
+    overflow: visible;
   }
 
   .preview-column {

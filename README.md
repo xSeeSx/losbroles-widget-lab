@@ -9,7 +9,9 @@ Laboratorio estatico para probar widgets de StreamElements y Twitch sin emitir e
 /src/app.js
 /src/styles.css
 /src/fixtures/streamelements/
+/src/fixtures/streamelements/chat/
 /src/fixtures/twitch/predictions/
+/src/harness/se-chat-mock.js
 /src/harness/se-mock.js
 /src/harness/twitch-eventsub-mock.js
 /src/harness/worker-mock.js
@@ -50,12 +52,14 @@ El despliegue automatico se ejecuta con GitHub Actions desde `.github/workflows/
 - El modo Debug captura logs del iframe, `console.log`, `console.warn`, `console.error` y errores JS cuando el navegador expone stack.
 - El modo Responsive permite presets `1920x1080`, `1280x720`, `960x240`, `800x200`, zoom visual y fondos transparente, gris, chroma y oscuro.
 - La pantalla `Import widget` permite pegar HTML, CSS, JS y `fields JSON`, previsualizar sin guardar, descargar un paquete y copiar la estructura de carpeta.
+- La seccion `Chat simulator` emula mensajes de Twitch dentro del formato de chat de StreamElements.
 - Los botones emiten payloads mock de StreamElements: `onWidgetLoad`, chat message, follow, subscriber, tip, cheer y `kvstore:update`.
 - El editor JSON muestra el payload del ultimo boton usado. Edita el JSON y pulsa el mismo boton para reenviarlo con cambios.
 - La validacion JSON aparece en pantalla y bloquea el envio cuando el payload no es valido.
 - El panel Twitch Predictions simula el ciclo EventSub de predicciones: begin, progress, lock y end.
 - El panel Worker WebSocket simula los mensajes que llegarian desde el Cloudflare Worker sin conectarse al Worker real por defecto.
 - La consola en pantalla recibe logs del laboratorio y del widget aislado.
+- Las secciones del panel lateral son colapsables y el panel tiene scroll propio para mantener visible la zona de preview.
 
 ## Mock de StreamElements
 
@@ -74,6 +78,35 @@ El despliegue automatico se ejecuta con GitHub Actions desde `.github/workflows/
 Los eventos se entregan con `window.addEventListener("onWidgetLoad", handler)`, `window.addEventListener("onEventReceived", handler)` y `window.addEventListener("onSessionUpdate", handler)`, usando `event.detail` como en widgets reales. El canal de prueba usa `username: "losbroles"` y `apiToken: "fake-api-token-never-real"`.
 
 Los payloads de ejemplo estan en `src/fixtures/streamelements/`.
+
+## Chat simulator
+
+En StreamElements el chat no llega como `onMessageReceived`. El evento correcto es `onEventReceived` y, para mensajes de chat, `event.detail.listener` debe ser `"message"`. Los datos del mensaje van en `event.detail.event.data`.
+
+La seccion `Chat simulator` construye payloads de Twitch con perfil de streamer, viewer normal, mod o subscriber y los entrega al iframe activo como:
+
+```js
+window.dispatchEvent(new CustomEvent("onEventReceived", {
+  detail: {
+    listener: "message",
+    event: {
+      data: {}
+    }
+  }
+}));
+```
+
+El laboratorio no expone APIs propias al widget para el chat. El widget solo recibe el evento real de StreamElements. Si el sandbox del iframe bloquea el dispatch directo desde la pagina padre, el mensaje entra por `se-mock.js` y se despacha dentro del iframe con el mismo `CustomEvent`.
+
+El chatbox rellena `data.text`, `data.emotes` y `data.tags.emotes`. Si `Parse known Twitch emotes` esta activo, escribir codigos como `Kappa`, `PogChamp`, `LUL`, `BibleThump` o `SeemsGood` calcula los indices `start` y `end` inclusivos y genera el formato Twitch de tags, por ejemplo:
+
+```text
+hola Kappa test -> 25:5-9
+```
+
+Tambien hay historial visible, debug del ultimo payload enviado, log en la consola del laboratorio y boton `Copy last chat payload`.
+
+Fixtures manuales del chatbox: `src/fixtures/streamelements/chat/manual-tests.json`.
 
 ## Mock de Twitch EventSub
 

@@ -1,0 +1,347 @@
+{
+  "notes": "Fixtures manuales del chatbox. Todos se emiten como onEventReceived con detail.listener = message.",
+  "cases": [
+    {
+      "id": "viewer-hola",
+      "description": "Mensaje normal de viewer: hola",
+      "payload": {
+        "detail": {
+          "listener": "message",
+          "event": {
+            "data": {
+              "time": 1716200000000,
+              "tags": {
+                "badges": "",
+                "color": "#1E90FF",
+                "display-name": "ViewerTest",
+                "emotes": "",
+                "flags": "",
+                "id": "mock-chat-viewer-hola",
+                "mod": "0",
+                "room-id": "133649243",
+                "subscriber": "0",
+                "tmi-sent-ts": "1716200000000",
+                "turbo": "0",
+                "user-id": "mock-viewer-001",
+                "user-type": ""
+              },
+              "nick": "viewertest",
+              "userId": "mock-viewer-001",
+              "displayName": "ViewerTest",
+              "displayColor": "#1E90FF",
+              "badges": [],
+              "channel": "losbroles",
+              "text": "hola",
+              "isAction": false,
+              "emotes": [],
+              "msgId": "mock-chat-viewer-hola"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "streamer-kappa",
+      "description": "Mensaje de streamer: Kappa",
+      "payload": {
+        "detail": {
+          "listener": "message",
+          "event": {
+            "data": {
+              "time": 1716200000001,
+              "tags": {
+                "badges": "broadcaster/1",
+                "color": "#9146FF",
+                "display-name": "LosBroles",
+                "emotes": "25:0-4",
+                "flags": "",
+                "id": "mock-chat-streamer-kappa",
+                "mod": "0",
+                "room-id": "133649243",
+                "subscriber": "0",
+                "tmi-sent-ts": "1716200000001",
+                "turbo": "0",
+                "user-id": "133649243",
+                "user-type": ""
+              },
+              "nick": "losbroles",
+              "userId": "133649243",
+              "displayName": "LosBroles",
+              "displayColor": "#9146FF",
+              "badges": ["broadcaster/1"],
+              "channel": "losbroles",
+              "text": "Kappa",
+              "isAction": false,
+              "emotes": [
+                {
+                  "type": "twitch",
+                  "name": "Kappa",
+                  "id": "25",
+                  "gif": false,
+                  "urls": {
+                    "1": "https://static-cdn.jtvnw.net/emoticons/v1/25/1.0",
+                    "2": "https://static-cdn.jtvnw.net/emoticons/v1/25/2.0",
+                    "4": "https://static-cdn.jtvnw.net/emoticons/v1/25/4.0"
+                  },
+                  "start": 0,
+                  "end": 4
+                }
+              ],
+              "msgId": "mock-chat-streamer-kappa"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "viewer-hola-kappa-test",
+      "description": "Mensaje con texto y emote: hola Kappa test",
+      "payload": {
+        "detail": {
+          "listener": "message",
+          "event": {
+            "data": {
+              "time": 1716200000002,
+              "tags": {
+                "badges": "",
+                "color": "#1E90FF",
+                "display-name": "ViewerTest",
+                "emotes": "25:5-9",
+                "flags": "",
+                "id": "mock-chat-hola-kappa-test",
+                "mod": "0",
+                "room-id": "133649243",
+                "subscriber": "0",
+                "tmi-sent-ts": "1716200000002",
+                "turbo": "0",
+                "user-id": "mock-viewer-001",
+                "user-type": ""
+              },
+              "nick": "viewertest",
+              "userId": "mock-viewer-001",
+              "displayName": "ViewerTest",
+              "displayColor": "#1E90FF",
+              "badges": [],
+              "channel": "losbroles",
+              "text": "hola Kappa test",
+              "isAction": false,
+              "emotes": [
+                {
+                  "type": "twitch",
+                  "name": "Kappa",
+                  "id": "25",
+                  "gif": false,
+                  "urls": {
+                    "1": "https://static-cdn.jtvnw.net/emoticons/v1/25/1.0",
+                    "2": "https://static-cdn.jtvnw.net/emoticons/v1/25/2.0",
+                    "4": "https://static-cdn.jtvnw.net/emoticons/v1/25/4.0"
+                  },
+                  "start": 5,
+                  "end": 9
+                }
+              ],
+              "msgId": "mock-chat-hola-kappa-test"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "viewer-two-emotes",
+      "description": "Mensaje con dos emotes: Kappa LUL",
+      "payload": {
+        "detail": {
+          "listener": "message",
+          "event": {
+            "data": {
+              "time": 1716200000003,
+              "tags": {
+                "badges": "",
+                "color": "#1E90FF",
+                "display-name": "ViewerTest",
+                "emotes": "25:0-4/425618:6-8",
+                "flags": "",
+                "id": "mock-chat-two-emotes",
+                "mod": "0",
+                "room-id": "133649243",
+                "subscriber": "0",
+                "tmi-sent-ts": "1716200000003",
+                "turbo": "0",
+                "user-id": "mock-viewer-001",
+                "user-type": ""
+              },
+              "nick": "viewertest",
+              "userId": "mock-viewer-001",
+              "displayName": "ViewerTest",
+              "displayColor": "#1E90FF",
+              "badges": [],
+              "channel": "losbroles",
+              "text": "Kappa LUL",
+              "isAction": false,
+              "emotes": [
+                {
+                  "type": "twitch",
+                  "name": "Kappa",
+                  "id": "25",
+                  "gif": false,
+                  "urls": {
+                    "1": "https://static-cdn.jtvnw.net/emoticons/v1/25/1.0",
+                    "2": "https://static-cdn.jtvnw.net/emoticons/v1/25/2.0",
+                    "4": "https://static-cdn.jtvnw.net/emoticons/v1/25/4.0"
+                  },
+                  "start": 0,
+                  "end": 4
+                },
+                {
+                  "type": "twitch",
+                  "name": "LUL",
+                  "id": "425618",
+                  "gif": false,
+                  "urls": {
+                    "1": "https://static-cdn.jtvnw.net/emoticons/v1/425618/1.0",
+                    "2": "https://static-cdn.jtvnw.net/emoticons/v1/425618/2.0",
+                    "4": "https://static-cdn.jtvnw.net/emoticons/v1/425618/4.0"
+                  },
+                  "start": 6,
+                  "end": 8
+                }
+              ],
+              "msgId": "mock-chat-two-emotes"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "mod-message",
+      "description": "Mensaje de mod",
+      "payload": {
+        "detail": {
+          "listener": "message",
+          "event": {
+            "data": {
+              "time": 1716200000004,
+              "tags": {
+                "badges": "moderator/1",
+                "color": "#1E90FF",
+                "display-name": "ViewerTest",
+                "emotes": "",
+                "flags": "",
+                "id": "mock-chat-mod",
+                "mod": "1",
+                "room-id": "133649243",
+                "subscriber": "0",
+                "tmi-sent-ts": "1716200000004",
+                "turbo": "0",
+                "user-id": "mock-viewer-001",
+                "user-type": ""
+              },
+              "nick": "viewertest",
+              "userId": "mock-viewer-001",
+              "displayName": "ViewerTest",
+              "displayColor": "#1E90FF",
+              "badges": ["mod/1"],
+              "channel": "losbroles",
+              "text": "hola mod",
+              "isAction": false,
+              "emotes": [],
+              "msgId": "mock-chat-mod"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "subscriber-message",
+      "description": "Mensaje de subscriber",
+      "payload": {
+        "detail": {
+          "listener": "message",
+          "event": {
+            "data": {
+              "time": 1716200000005,
+              "tags": {
+                "badges": "subscriber/12",
+                "color": "#1E90FF",
+                "display-name": "ViewerTest",
+                "emotes": "",
+                "flags": "",
+                "id": "mock-chat-subscriber",
+                "mod": "0",
+                "room-id": "133649243",
+                "subscriber": "1",
+                "tmi-sent-ts": "1716200000005",
+                "turbo": "0",
+                "user-id": "mock-viewer-001",
+                "user-type": ""
+              },
+              "nick": "viewertest",
+              "userId": "mock-viewer-001",
+              "displayName": "ViewerTest",
+              "displayColor": "#1E90FF",
+              "badges": ["subscriber/12"],
+              "channel": "losbroles",
+              "text": "hola subscriber",
+              "isAction": false,
+              "emotes": [],
+              "msgId": "mock-chat-subscriber"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "action-me",
+      "description": "Mensaje action /me",
+      "payload": {
+        "detail": {
+          "listener": "message",
+          "event": {
+            "data": {
+              "time": 1716200000006,
+              "tags": {
+                "badges": "",
+                "color": "#1E90FF",
+                "display-name": "ViewerTest",
+                "emotes": "25:7-11",
+                "flags": "",
+                "id": "mock-chat-action-me",
+                "mod": "0",
+                "room-id": "133649243",
+                "subscriber": "0",
+                "tmi-sent-ts": "1716200000006",
+                "turbo": "0",
+                "user-id": "mock-viewer-001",
+                "user-type": ""
+              },
+              "nick": "viewertest",
+              "userId": "mock-viewer-001",
+              "displayName": "ViewerTest",
+              "displayColor": "#1E90FF",
+              "badges": [],
+              "channel": "losbroles",
+              "text": "saluda Kappa",
+              "isAction": true,
+              "emotes": [
+                {
+                  "type": "twitch",
+                  "name": "Kappa",
+                  "id": "25",
+                  "gif": false,
+                  "urls": {
+                    "1": "https://static-cdn.jtvnw.net/emoticons/v1/25/1.0",
+                    "2": "https://static-cdn.jtvnw.net/emoticons/v1/25/2.0",
+                    "4": "https://static-cdn.jtvnw.net/emoticons/v1/25/4.0"
+                  },
+                  "start": 7,
+                  "end": 11
+                }
+              ],
+              "msgId": "mock-chat-action-me"
+            }
+          }
+        }
+      }
+    }
+  ]
+}
