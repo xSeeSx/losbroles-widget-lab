@@ -49,6 +49,7 @@ El despliegue automatico se ejecuta con GitHub Actions desde `.github/workflows/
 - El editor JSON muestra el payload del ultimo boton usado. Edita el JSON y pulsa el mismo boton para reenviarlo con cambios.
 - La validacion JSON aparece en pantalla y bloquea el envio cuando el payload no es valido.
 - El panel Twitch Predictions simula el ciclo EventSub de predicciones: begin, progress, lock y end.
+- El panel Worker WebSocket simula los mensajes que llegarian desde el Cloudflare Worker sin conectarse al Worker real por defecto.
 - La consola en pantalla recibe logs del laboratorio y del widget aislado.
 
 ## Mock de StreamElements
@@ -93,6 +94,36 @@ Tipos soportados:
 El panel permite configurar titulo, duracion, numero de opciones, nombre de cada opcion, usuarios, puntos y `winning_outcome_id`. Cada accion registra en la consola el evento emitido, timestamp y resumen del payload.
 
 Los payloads base estan en `src/fixtures/twitch/predictions/`.
+
+## Mock del Cloudflare Worker
+
+`src/harness/worker-mock.js` sustituye `window.WebSocket` dentro del iframe y, por defecto, intercepta cualquier URL que contenga `/ws`. No se configura ninguna URL real ni se conecta al Worker real por defecto.
+
+Cuando un widget abre `new WebSocket(url)` con una URL que contiene `/ws`, el mock:
+
+- crea una conexion WebSocket compatible con `send`, `close`, `onopen`, `onmessage`, `onerror`, `onclose` y `addEventListener`;
+- envia automaticamente `{ "type": "welcome", "session_id": "mock-session-id" }`;
+- registra en la consola del laboratorio los mensajes enviados por el widget;
+- permite broadcasts desde el panel hacia todas las conexiones WebSocket mock abiertas en los iframes.
+
+El panel Worker WebSocket incluye:
+
+- toggle `Interceptar WebSocket del Worker`;
+- campo informativo `Worker URL real`, vacio por defecto;
+- botones para enviar `welcome`, `bridge.error` y predicciones `begin`, `progress`, `lock`, `end`;
+- consola de conexiones WebSocket mock.
+
+Los mensajes de prediccion enviados por el mock del Worker usan el mismo contrato de Twitch EventSub:
+
+```json
+{
+  "type": "channel.prediction.progress",
+  "subscription": {
+    "type": "channel.prediction.progress"
+  },
+  "event": {}
+}
+```
 
 ## Crear widgets
 

@@ -81,6 +81,44 @@
     console.info("twitch:eventsub received", payload);
   });
 
+  try {
+    const socket = new WebSocket("wss://worker.mock/ws");
+
+    socket.addEventListener("open", () => {
+      socket.send(JSON.stringify({
+        type: "widget.ready",
+        widget: "demo"
+      }));
+      console.info("worker websocket open");
+    });
+
+    socket.addEventListener("message", (event) => {
+      const payload = JSON.parse(event.data);
+      const item = document.createElement("li");
+
+      item.textContent = `worker: ${payload.type}`;
+      events.prepend(item);
+
+      while (events.children.length > state.maxEvents) {
+        events.lastElementChild.remove();
+      }
+
+      state.count += 1;
+      message.textContent = `Latest Worker message: ${payload.type}`;
+      renderCounter();
+      console.info("worker websocket message", payload);
+    });
+
+    socket.addEventListener("close", (event) => {
+      console.info("worker websocket close", {
+        code: event.code,
+        reason: event.reason
+      });
+    });
+  } catch (error) {
+    console.warn("worker websocket unavailable", error);
+  }
+
   if (typeof window.__LAB_LOG__ === "function") {
     window.__LAB_LOG__("info", "Demo widget script ready");
   }

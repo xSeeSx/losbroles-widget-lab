@@ -80,6 +80,11 @@ const state = {
   seFixtures: {},
   twitchPredictionFixtures: {},
   prediction: createDefaultPredictionState(),
+  worker: {
+    interceptWebSocket: true,
+    workerUrl: "",
+    connectionLogCount: 0
+  },
   activePayloadType: "widgetLoad",
   payloadDrafts: {},
   logCount: 0
@@ -100,6 +105,7 @@ async function init() {
       loadTwitchPredictionFixtures()
     ]);
     renderPredictionControls();
+    renderWorkerControls();
     await loadRegistry();
     setStatus("Listo");
   } catch (error) {
@@ -132,6 +138,16 @@ function bindElements() {
   elements.predictionEndTwoButton = document.querySelector("#predictionEndTwoButton");
   elements.predictionCancelButton = document.querySelector("#predictionCancelButton");
   elements.predictionResetButton = document.querySelector("#predictionResetButton");
+  elements.workerInterceptToggle = document.querySelector("#workerInterceptToggle");
+  elements.workerUrlInput = document.querySelector("#workerUrlInput");
+  elements.workerWelcomeButton = document.querySelector("#workerWelcomeButton");
+  elements.workerErrorButton = document.querySelector("#workerErrorButton");
+  elements.workerBeginButton = document.querySelector("#workerBeginButton");
+  elements.workerProgressButton = document.querySelector("#workerProgressButton");
+  elements.workerLockButton = document.querySelector("#workerLockButton");
+  elements.workerEndButton = document.querySelector("#workerEndButton");
+  elements.workerConnectionCount = document.querySelector("#workerConnectionCount");
+  elements.workerConnectionList = document.querySelector("#workerConnectionList");
   elements.fieldsList = document.querySelector("#fieldsList");
   elements.frame = document.querySelector("#widgetFrame");
   elements.logList = document.querySelector("#logList");
@@ -187,10 +203,28 @@ function bindEvents() {
   elements.predictionCancelButton.addEventListener("click", cancelPrediction);
   elements.predictionResetButton.addEventListener("click", resetPrediction);
 
+  elements.workerInterceptToggle.addEventListener("change", () => {
+    state.worker.interceptWebSocket = elements.workerInterceptToggle.checked;
+    sendWorkerConfig();
+  });
+
+  elements.workerUrlInput.addEventListener("input", () => {
+    state.worker.workerUrl = elements.workerUrlInput.value.trim();
+    sendWorkerConfig();
+  });
+
+  elements.workerWelcomeButton.addEventListener("click", sendWorkerWelcome);
+  elements.workerErrorButton.addEventListener("click", sendWorkerBridgeError);
+  elements.workerBeginButton.addEventListener("click", () => sendWorkerPrediction("begin"));
+  elements.workerProgressButton.addEventListener("click", () => sendWorkerPrediction("progress"));
+  elements.workerLockButton.addEventListener("click", () => sendWorkerPrediction("lock"));
+  elements.workerEndButton.addEventListener("click", () => sendWorkerPrediction("end"));
+
   elements.clearLogsButton.addEventListener("click", clearLogs);
   elements.frame.addEventListener("load", () => {
     if (state.selectedWidget) {
       writeLog("info", "lab", `Iframe cargado: ${state.selectedWidget.id}`);
+      sendWorkerConfig();
     }
   });
 
@@ -826,6 +860,146 @@ function summarizePredictionState() {
   };
 }
 
+function renderWorkerControls() {
+  elements.workerInterceptToggle.checked = state.worker.interceptWebSocket;
+  elements.workerUrlInput.value = state.worker.workerUrl;
+  updateWorkerConnectionCount();
+}
+
+function sendWorkerConfig() {
+  postToWidgetFrames({
+    source: LAB_SOURCE,
+    type: "WORKER_MOCK_CONFIG",
+    config: {
+      interceptWebSocket: state.worker.interceptWebSocket,
+      workerUrl: state.worker.workerUrl
+    }
+  });
+}
+
+function sendWorkerWelcome() {
+  const payload = {
+    type: "welcome",
+    session_id: "mock-session-id"
+  };
+
+  postWorkerBroadcast("WORKER_MOCK_WELCOME", payload, "Worker welcome");
+}
+
+function sendWorkerBridgeError() {
+  const payload = {
+    type: "bridge.error",
+    error: {
+      code: "mock_bridge_error",
+      message: "Simulated Worker bridge error"
+    }
+  };
+
+  postWorkerBroadcast("WORKER_MOCK_BRIDGE_ERROR", payload, "Worker bridge.error");
+}
+
+function sendWorkerPrediction(stage) {
+  syncPredictionFromControls();
+
+  if (stage === "begin") {
+    startPredictionWindow();
+    state.prediction.status = "active";
+    state.prediction.lockedAt = null;
+    state.prediction.endedAt = null;
+  } else {
+    ensurePredictionStarted();
+  }
+
+  if (stage === "lock") {
+    state.prediction.status = "locked";
+    state.prediction.lockedAt = new Date().toISOString();
+  }
+
+  if (stage === "end") {
+    state.prediction.status = "resolved";
+    state.prediction.endedAt = new Date().toISOString();
+    state.prediction.winningOutcomeId = state.prediction.winningOutcomeId || state.prediction.outcomes[0]?.id || null;
+  }
+
+  const payload = buildPredictionPayload(stage);
+  postWorkerBroadcast("WORKER_MOCK_BROADCAST", payload, `Worker ${payload.type}`);
+}
+
+function postWorkerBroadcast(type, payload, label) {
+  postToWidgetFrames({
+    source: LAB_SOURCE,
+    type,
+    payload
+  });
+
+  writeLog("info", "lab", `${label} broadcast solicitado`, {
+    timestamp: new Date().toISOString(),
+    summary: summarizeWorkerPayload(payload),
+    payload
+  });
+}
+
+function postToWidgetFrames(message) {
+  const frames = document.querySelectorAll("iframe");
+
+  for (const frame of frames) {
+    frame.contentWindow?.postMessage(message, "*");
+  }
+}
+
+function summarizeWorkerPayload(payload) {
+  if (!payload || typeof payload !== "object") {
+    return String(payload);
+  }
+
+  if (payload.type === "welcome") {
+    return {
+      type: payload.type,
+      session_id: payload.session_id
+    };
+  }
+
+  if (payload.type === "bridge.error") {
+    return {
+      type: payload.type,
+      code: payload.error?.code,
+      message: payload.error?.message
+    };
+  }
+
+  return summarizePredictionPayload(payload);
+}
+
+function appendWorkerConnectionLog(entry) {
+  const item = document.createElement("li");
+  const title = document.createElement("strong");
+  const meta = document.createElement("code");
+
+  item.className = "worker-connection-entry";
+  title.textContent = `${entry.kind || "worker"} - ${entry.summary || ""}`;
+  meta.textContent = `${entry.timestamp || new Date().toISOString()} | ${entry.connectionId || "-"} | ${entry.url || ""}`;
+  item.append(title, meta);
+
+  if (entry.payload) {
+    const payload = document.createElement("code");
+    payload.textContent = stringifyLogData(entry.payload);
+    item.append(payload);
+  }
+
+  elements.workerConnectionList.prepend(item);
+
+  while (elements.workerConnectionList.children.length > 40) {
+    elements.workerConnectionList.lastElementChild.remove();
+  }
+
+  state.worker.connectionLogCount += 1;
+  updateWorkerConnectionCount();
+}
+
+function updateWorkerConnectionCount() {
+  elements.workerConnectionCount.textContent = String(state.worker.connectionLogCount);
+}
+
 function renderIframe({ manifest, html, css, script, fieldsSchema, fieldData, harnessScripts }) {
   const documentHtml = buildIframeDocument({
     manifest,
@@ -977,6 +1151,8 @@ function handleWidgetMessage(event) {
 
   if (data.type === "LOG") {
     writeLog(data.level || "log", "widget", data.message || "", data.data);
+  } else if (data.type === "WORKER_WS_LOG") {
+    appendWorkerConnectionLog(data.entry || {});
   }
 }
 

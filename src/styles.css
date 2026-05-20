@@ -248,6 +248,82 @@ textarea:focus-visible {
   font-size: 0.74rem;
 }
 
+.worker-panel {
+  border-top: 1px solid var(--line);
+  padding-top: 16px;
+}
+
+.toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--ink);
+  font-size: 0.88rem;
+  font-weight: 650;
+}
+
+.toggle-row input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
+}
+
+.worker-console {
+  display: grid;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #ffffff;
+  min-height: 120px;
+}
+
+.worker-console-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border-bottom: 1px solid var(--line);
+  padding: 8px 10px;
+}
+
+.worker-console-header h3 {
+  margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.2;
+}
+
+.worker-console-header span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 750;
+}
+
+.worker-connection-list {
+  display: grid;
+  gap: 6px;
+  max-height: 190px;
+  margin: 0;
+  overflow: auto;
+  padding: 0 10px 10px;
+}
+
+.worker-connection-entry {
+  display: grid;
+  gap: 4px;
+  border-left: 3px solid var(--accent);
+  color: var(--ink);
+  font-size: 0.78rem;
+  line-height: 1.35;
+  list-style: none;
+  padding: 6px 0 6px 8px;
+}
+
+.worker-connection-entry code {
+  color: var(--muted);
+  font-family: "Cascadia Mono", Consolas, monospace;
+  overflow-wrap: anywhere;
+}
+
 .meta-block {
   min-height: 54px;
   border-left: 3px solid var(--accent);

@@ -79,6 +79,34 @@
           </div>
         </section>
 
+        <section class="panel-section worker-panel" aria-label="Cloudflare Worker mock">
+          <h2>Worker WebSocket</h2>
+          <label class="toggle-row">
+            <input id="workerInterceptToggle" type="checkbox" checked>
+            <span>Interceptar WebSocket del Worker</span>
+          </label>
+
+          <label class="field-label" for="workerUrlInput">Worker URL real</label>
+          <input id="workerUrlInput" class="text-input" type="url" placeholder="wss://.../ws">
+
+          <div class="button-stack">
+            <button id="workerWelcomeButton" type="button">Enviar welcome</button>
+            <button id="workerErrorButton" type="button">Enviar bridge.error</button>
+            <button id="workerBeginButton" type="button">Worker begin</button>
+            <button id="workerProgressButton" type="button">Worker progress</button>
+            <button id="workerLockButton" type="button">Worker lock</button>
+            <button id="workerEndButton" type="button">Worker end</button>
+          </div>
+
+          <div class="worker-console">
+            <div class="worker-console-header">
+              <h3>Conexiones WebSocket mock</h3>
+              <span id="workerConnectionCount">0</span>
+            </div>
+            <ol id="workerConnectionList" class="worker-connection-list"></ol>
+          </div>
+        </section>
+
         <section class="panel-section">
           <h2>Fields</h2>
           <dl id="fieldsList" class="fields-list"></dl>
