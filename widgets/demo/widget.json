@@ -1,11 +1,16 @@
 {
   "id": "demo",
   "name": "Demo widget",
+  "description": "Widget minimo para validar fields, eventos mock y el runtime del laboratorio.",
   "version": "0.1.0",
-  "description": "Widget demo minimo para probar carga, fields y eventos mock.",
-  "entry": "widget.html",
-  "styles": "widget.css",
-  "script": "widget.js",
-  "fields": "fields.json"
+  "author": "LosBroles",
+  "category": "demo",
+  "width": 800,
+  "height": 200,
+  "html": "widgets/demo/widget.html",
+  "css": "widgets/demo/widget.css",
+  "js": "widgets/demo/widget.js",
+  "fields": "widgets/demo/fields.json",
+  "mocks": "widgets/demo/mocks/index.json",
+  "notes": "Copia local de referencia. El indice principal es widgets/registry.json."
 }
-

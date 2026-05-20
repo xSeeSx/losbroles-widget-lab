@@ -32,6 +32,23 @@ const TWITCH_PREDICTION_TYPES = {
   end: "channel.prediction.end"
 };
 
+const REQUIRED_WIDGET_FIELDS = [
+  "id",
+  "name",
+  "description",
+  "version",
+  "author",
+  "category",
+  "width",
+  "height",
+  "html",
+  "css",
+  "js",
+  "fields",
+  "mocks",
+  "notes"
+];
+
 const SE_ACTIONS = {
   widgetLoad: {
     label: "onWidgetLoad",
@@ -75,8 +92,17 @@ const state = {
   selectedWidget: null,
   selectedManifest: null,
   selectedManifestUrl: null,
+  registry: null,
   fieldsSchema: {},
   fieldData: {},
+  validationResults: [],
+  debugEntries: [],
+  debugMode: true,
+  responsive: {
+    preset: "800x200",
+    zoom: 1,
+    background: "gray"
+  },
   seFixtures: {},
   twitchPredictionFixtures: {},
   prediction: createDefaultPredictionState(),
@@ -106,6 +132,8 @@ async function init() {
     ]);
     renderPredictionControls();
     renderWorkerControls();
+    applyDebugMode();
+    applyResponsiveMode();
     await loadRegistry();
     setStatus("Listo");
   } catch (error) {
@@ -118,6 +146,14 @@ function bindElements() {
   elements.status = document.querySelector("#appStatus");
   elements.widgetSelect = document.querySelector("#widgetSelect");
   elements.widgetMeta = document.querySelector("#widgetMeta");
+  elements.validateWidgetsButton = document.querySelector("#validateWidgetsButton");
+  elements.validationSummary = document.querySelector("#validationSummary");
+  elements.validationResults = document.querySelector("#validationResults");
+  elements.debugModeToggle = document.querySelector("#debugModeToggle");
+  elements.copyDebugReportButton = document.querySelector("#copyDebugReportButton");
+  elements.viewportPresetSelect = document.querySelector("#viewportPresetSelect");
+  elements.zoomSelect = document.querySelector("#zoomSelect");
+  elements.previewBackgroundSelect = document.querySelector("#previewBackgroundSelect");
   elements.reloadButton = document.querySelector("#reloadWidgetButton");
   elements.seActionButtons = Array.from(document.querySelectorAll("[data-se-action]"));
   elements.clearLogsButton = document.querySelector("#clearLogsButton");
@@ -149,6 +185,8 @@ function bindElements() {
   elements.workerConnectionCount = document.querySelector("#workerConnectionCount");
   elements.workerConnectionList = document.querySelector("#workerConnectionList");
   elements.fieldsList = document.querySelector("#fieldsList");
+  elements.previewShell = document.querySelector("#previewShell");
+  elements.iframeViewport = document.querySelector("#iframeViewport");
   elements.frame = document.querySelector("#widgetFrame");
   elements.logList = document.querySelector("#logList");
   elements.logCount = document.querySelector("#logCount");
@@ -157,6 +195,25 @@ function bindElements() {
 function bindEvents() {
   elements.widgetSelect.addEventListener("change", () => {
     loadWidget(elements.widgetSelect.value);
+  });
+
+  elements.validateWidgetsButton.addEventListener("click", validateWidgets);
+  elements.debugModeToggle.addEventListener("change", () => {
+    state.debugMode = elements.debugModeToggle.checked;
+    applyDebugMode();
+  });
+  elements.copyDebugReportButton.addEventListener("click", copyDebugReport);
+  elements.viewportPresetSelect.addEventListener("change", () => {
+    state.responsive.preset = elements.viewportPresetSelect.value;
+    applyResponsiveMode();
+  });
+  elements.zoomSelect.addEventListener("change", () => {
+    state.responsive.zoom = Number(elements.zoomSelect.value);
+    applyResponsiveMode();
+  });
+  elements.previewBackgroundSelect.addEventListener("change", () => {
+    state.responsive.background = elements.previewBackgroundSelect.value;
+    applyResponsiveMode();
   });
 
   elements.reloadButton.addEventListener("click", () => {
@@ -250,6 +307,7 @@ async function loadTwitchPredictionFixtures() {
 async function loadRegistry() {
   setStatus("Cargando registry");
   const registry = await fetchJson(REGISTRY_URL);
+  state.registry = registry;
   state.widgets = Array.isArray(registry.widgets) ? registry.widgets : [];
 
   if (state.widgets.length === 0) {
@@ -258,6 +316,116 @@ async function loadRegistry() {
 
   renderWidgetOptions();
   await loadWidget(state.widgets[0].id);
+}
+
+async function validateWidgets() {
+  elements.validationSummary.textContent = "Validando widgets...";
+  elements.validationResults.replaceChildren();
+  setStatus("Validando widgets");
+
+  try {
+    const registry = await fetchJson(REGISTRY_URL);
+    state.registry = registry;
+    state.widgets = Array.isArray(registry.widgets) ? registry.widgets : [];
+    renderWidgetOptions();
+    const results = [];
+
+    if (!Array.isArray(registry.widgets)) {
+      results.push(createValidationResult("error", "registry", "widgets/registry.json debe contener un array widgets."));
+    } else if (registry.widgets.length === 0) {
+      results.push(createValidationResult("error", "registry", "widgets/registry.json no contiene widgets."));
+    }
+
+    for (const widget of state.widgets) {
+      results.push(...await validateWidgetEntry(widget));
+    }
+
+    state.validationResults = results;
+    renderValidationResults(results);
+    setStatus("Validacion completada");
+  } catch (error) {
+    const results = [createValidationResult("error", "registry", `No se pudo cargar widgets/registry.json: ${error.message}`)];
+    state.validationResults = results;
+    renderValidationResults(results);
+    setStatus("Error de validacion");
+  }
+}
+
+async function validateWidgetEntry(widget) {
+  const widgetId = widget?.id || "sin-id";
+  const results = [];
+
+  if (!widget || typeof widget !== "object") {
+    return [createValidationResult("error", widgetId, "La entrada del registry no es un objeto.")];
+  }
+
+  for (const field of REQUIRED_WIDGET_FIELDS) {
+    if (!Object.prototype.hasOwnProperty.call(widget, field) || widget[field] === "" || typeof widget[field] === "undefined") {
+      results.push(createValidationResult("error", widgetId, `Falta el campo obligatorio ${field}.`));
+    }
+  }
+
+  if (!Number.isFinite(Number(widget.width)) || Number(widget.width) < 1) {
+    results.push(createValidationResult("error", widgetId, "width debe ser un numero positivo."));
+  }
+
+  if (!Number.isFinite(Number(widget.height)) || Number(widget.height) < 1) {
+    results.push(createValidationResult("error", widgetId, "height debe ser un numero positivo."));
+  }
+
+  const fileChecks = [
+    ["html", "text"],
+    ["css", "text"],
+    ["js", "text"],
+    ["fields", "json"],
+    ["mocks", "json"]
+  ];
+
+  for (const [field, type] of fileChecks) {
+    if (!widget[field]) {
+      continue;
+    }
+
+    try {
+      const url = resolveWidgetUrl(widget[field]);
+
+      if (type === "json") {
+        await fetchJson(url);
+      } else {
+        await fetchText(url);
+      }
+
+      results.push(createValidationResult("ok", widgetId, `${field} carga correctamente: ${widget[field]}`));
+    } catch (error) {
+      results.push(createValidationResult("error", widgetId, `${field} no carga: ${widget[field]} (${error.message})`));
+    }
+  }
+
+  return results;
+}
+
+function createValidationResult(level, widgetId, message) {
+  return {
+    level,
+    widgetId,
+    message,
+    timestamp: new Date().toISOString()
+  };
+}
+
+function renderValidationResults(results) {
+  const errorCount = results.filter((result) => result.level === "error").length;
+  const okCount = results.filter((result) => result.level === "ok").length;
+  elements.validationSummary.textContent = `${errorCount} errores, ${okCount} comprobaciones correctas`;
+  elements.validationSummary.className = `validation-summary ${errorCount > 0 ? "has-errors" : "is-ok"}`;
+  elements.validationResults.replaceChildren();
+
+  for (const result of results) {
+    const item = document.createElement("li");
+    item.className = `validation-result validation-${result.level}`;
+    item.textContent = `[${result.widgetId}] ${result.message}`;
+    elements.validationResults.append(item);
+  }
 }
 
 function renderWidgetOptions() {
@@ -281,17 +449,15 @@ async function loadWidget(widgetId) {
 
   setStatus(`Cargando ${widget.name || widget.id}`);
   state.selectedWidget = widget;
+  state.selectedManifest = widget;
+  state.selectedManifestUrl = REGISTRY_URL;
   elements.widgetSelect.value = widget.id;
 
   try {
-    const manifestUrl = new URL(widget.path || widget.manifest, window.location.href);
-    const manifest = await fetchJson(manifestUrl);
-    const widgetBaseUrl = new URL(".", manifestUrl);
-
-    const entryUrl = new URL(manifest.entry || "widget.html", widgetBaseUrl);
-    const styleUrl = new URL(manifest.styles || "widget.css", widgetBaseUrl);
-    const scriptUrl = new URL(manifest.script || "widget.js", widgetBaseUrl);
-    const fieldsUrl = new URL(manifest.fields || "fields.json", widgetBaseUrl);
+    const entryUrl = resolveWidgetUrl(widget.html);
+    const styleUrl = resolveWidgetUrl(widget.css);
+    const scriptUrl = resolveWidgetUrl(widget.js);
+    const fieldsUrl = resolveWidgetUrl(widget.fields);
 
     const [html, css, script, fieldsSchema, ...harnessScripts] = await Promise.all([
       fetchText(entryUrl),
@@ -301,21 +467,22 @@ async function loadWidget(widgetId) {
       ...HARNESS_URLS.map((url) => fetchText(url))
     ]);
 
-    state.selectedManifest = manifest;
-    state.selectedManifestUrl = manifestUrl;
     state.fieldsSchema = fieldsSchema;
     state.fieldData = extractFieldData(fieldsSchema);
 
-    renderWidgetMeta(widget, manifest);
+    renderWidgetMeta(widget);
     renderFields(fieldsSchema, state.fieldData);
     resetPayloadDrafts();
-    renderIframe({ manifest, html, css, script, fieldsSchema, fieldData: state.fieldData, harnessScripts });
+    renderIframe({ manifest: widget, html, css, script, fieldsSchema, fieldData: state.fieldData, harnessScripts });
 
-    setStatus(`Cargado: ${manifest.name || widget.name || widget.id}`);
+    setStatus(`Cargado: ${widget.name || widget.id}`);
     writeLog("info", "lab", `Widget cargado: ${widget.id}`, {
-      manifest: manifestUrl.pathname,
+      registry: REGISTRY_URL.pathname,
       entry: entryUrl.pathname,
-      fields: fieldsUrl.pathname
+      css: styleUrl.pathname,
+      js: scriptUrl.pathname,
+      fields: fieldsUrl.pathname,
+      size: `${widget.width}x${widget.height}`
     });
   } catch (error) {
     setStatus("Error al cargar widget");
@@ -323,15 +490,15 @@ async function loadWidget(widgetId) {
   }
 }
 
-function renderWidgetMeta(widget, manifest) {
+function renderWidgetMeta(widget) {
   elements.widgetMeta.replaceChildren();
 
   const title = document.createElement("strong");
-  title.textContent = manifest.name || widget.name || widget.id;
+  title.textContent = widget.name || widget.id;
   elements.widgetMeta.append(title);
 
   const description = document.createElement("span");
-  description.textContent = manifest.description || widget.description || "Sin descripcion";
+  description.textContent = `${widget.description || "Sin descripcion"} ${widget.version ? `v${widget.version}` : ""} ${widget.category ? `- ${widget.category}` : ""} ${widget.width && widget.height ? `- ${widget.width}x${widget.height}` : ""}`;
   elements.widgetMeta.append(description);
 }
 
@@ -457,6 +624,82 @@ function setPayloadError(message) {
 function clearPayloadError() {
   elements.payloadError.textContent = "";
   elements.payloadError.hidden = true;
+}
+
+function applyDebugMode() {
+  document.body.classList.toggle("debug-off", !state.debugMode);
+  elements.debugModeToggle.checked = state.debugMode;
+}
+
+async function copyDebugReport() {
+  const report = buildDebugReport();
+
+  try {
+    if (navigator.clipboard?.writeText) {
+      try {
+        await navigator.clipboard.writeText(report);
+      } catch (error) {
+        copyTextFallback(report);
+      }
+    } else {
+      copyTextFallback(report);
+    }
+
+    writeLog("info", "lab", "Debug report copiado al portapapeles");
+  } catch (error) {
+    window.__LAST_DEBUG_REPORT__ = report;
+    writeLog("warn", "lab", "Debug report generado; el navegador bloqueo la copia automatica", {
+      error: serializeLogData(error),
+      report
+    });
+  }
+}
+
+function copyTextFallback(text) {
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.setAttribute("readonly", "");
+  textarea.style.position = "fixed";
+  textarea.style.left = "-9999px";
+  document.body.append(textarea);
+  textarea.select();
+  const copied = document.execCommand("copy");
+  textarea.remove();
+
+  if (!copied) {
+    throw new Error("document.execCommand('copy') no copio el texto");
+  }
+}
+
+function buildDebugReport() {
+  return JSON.stringify({
+    generatedAt: new Date().toISOString(),
+    page: window.location.href,
+    selectedWidget: state.selectedWidget,
+    responsive: state.responsive,
+    validationResults: state.validationResults,
+    logs: state.debugEntries,
+    workerConnections: Array.from(elements.workerConnectionList.querySelectorAll(".worker-connection-entry")).map((item) => item.textContent)
+  }, null, 2);
+}
+
+function applyResponsiveMode() {
+  const [width, height] = state.responsive.preset.split("x").map((value) => Number.parseInt(value, 10));
+  const zoom = Number(state.responsive.zoom) || 1;
+
+  elements.viewportPresetSelect.value = state.responsive.preset;
+  elements.zoomSelect.value = String(zoom);
+  elements.previewBackgroundSelect.value = state.responsive.background;
+
+  elements.iframeViewport.style.width = `${width * zoom}px`;
+  elements.iframeViewport.style.height = `${height * zoom}px`;
+  elements.frame.style.width = `${width}px`;
+  elements.frame.style.height = `${height}px`;
+  elements.frame.style.transform = `scale(${zoom})`;
+  elements.frame.style.transformOrigin = "top left";
+
+  elements.previewShell.classList.remove("preview-bg-transparent", "preview-bg-gray", "preview-bg-chroma", "preview-bg-dark");
+  elements.previewShell.classList.add(`preview-bg-${state.responsive.background}`);
 }
 
 function createDefaultPredictionState() {
@@ -1106,10 +1349,10 @@ function buildIframeDocument({ manifest, html, css, script, fieldsSchema, fieldD
       body {
         display: grid;
         place-items: center;
-        background: #101820;
+        background: transparent;
         color: #ffffff;
         font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        padding: 24px;
+        padding: 0;
       }
     </style>
     <style>${css}</style>
@@ -1158,6 +1401,7 @@ function handleWidgetMessage(event) {
 
 function clearLogs() {
   state.logCount = 0;
+  state.debugEntries = [];
   elements.logList.replaceChildren();
   updateLogCount();
 }
@@ -1166,7 +1410,14 @@ function writeLog(level, source, message, data) {
   const normalizedLevel = ["log", "info", "warn", "error"].includes(level) ? level : "log";
   const item = document.createElement("li");
   const timestamp = new Date();
-  item.className = `log-entry log-${normalizedLevel}`;
+  const entry = {
+    timestamp: timestamp.toISOString(),
+    level: normalizedLevel,
+    source,
+    message,
+    data: serializeLogData(data)
+  };
+  item.className = `log-entry log-${normalizedLevel} ${source === "widget" ? "log-from-widget" : ""}`;
 
   const time = document.createElement("time");
   time.dateTime = timestamp.toISOString();
@@ -1190,6 +1441,12 @@ function writeLog(level, source, message, data) {
 
   elements.logList.append(item);
   state.logCount += 1;
+  state.debugEntries.push(entry);
+
+  if (state.debugEntries.length > 500) {
+    state.debugEntries.shift();
+  }
+
   updateLogCount();
   elements.logList.scrollTop = elements.logList.scrollHeight;
 }
@@ -1286,8 +1543,32 @@ function stringifyLogData(data) {
   }
 }
 
+function serializeLogData(data) {
+  if (typeof data === "undefined") {
+    return undefined;
+  }
+
+  if (data instanceof Error) {
+    return {
+      name: data.name,
+      message: data.message,
+      stack: data.stack
+    };
+  }
+
+  try {
+    return JSON.parse(JSON.stringify(data));
+  } catch (error) {
+    return String(data);
+  }
+}
+
 function cloneJson(value) {
   return JSON.parse(JSON.stringify(value));
+}
+
+function resolveWidgetUrl(path) {
+  return new URL(path, window.location.href);
 }
 
 function clampInteger(value, min, max) {

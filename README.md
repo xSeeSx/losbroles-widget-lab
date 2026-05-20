@@ -41,10 +41,14 @@ El despliegue automatico se ejecuta con GitHub Actions desde `.github/workflows/
 ## Funcionamiento
 
 - El listado de widgets se carga desde `widgets/registry.json`.
-- El selector carga el `widget.json` del widget seleccionado.
+- `widgets/registry.json` es el indice principal del almacen de widgets.
+- El selector carga el HTML, CSS, JS, fields y mocks declarados en el registry.
 - El laboratorio lee `widget.html`, `widget.css`, `widget.js` y `fields.json`.
 - El iframe se construye con `srcdoc` y `sandbox="allow-scripts"`.
 - Los mocks de `src/harness/` se inyectan antes de ejecutar el JavaScript del widget.
+- El boton `Validate widgets` comprueba campos obligatorios y que los archivos declarados cargan correctamente.
+- El modo Debug captura logs del iframe, `console.log`, `console.warn`, `console.error` y errores JS cuando el navegador expone stack.
+- El modo Responsive permite presets `1920x1080`, `1280x720`, `960x240`, `800x200`, zoom visual y fondos transparente, gris, chroma y oscuro.
 - Los botones emiten payloads mock de StreamElements: `onWidgetLoad`, chat message, follow, subscriber, tip, cheer y `kvstore:update`.
 - El editor JSON muestra el payload del ultimo boton usado. Edita el JSON y pulsa el mismo boton para reenviarlo con cambios.
 - La validacion JSON aparece en pantalla y bloquea el envio cuando el payload no es valido.
@@ -125,8 +129,34 @@ Los mensajes de prediccion enviados por el mock del Worker usan el mismo contrat
 }
 ```
 
+## Almacen de widgets
+
+`widgets/registry.json` es la fuente principal. Cada entrada debe incluir:
+
+```json
+{
+  "id": "demo",
+  "name": "Demo widget",
+  "description": "Descripcion breve",
+  "version": "0.1.0",
+  "author": "LosBroles",
+  "category": "demo",
+  "width": 800,
+  "height": 200,
+  "html": "widgets/demo/widget.html",
+  "css": "widgets/demo/widget.css",
+  "js": "widgets/demo/widget.js",
+  "fields": "widgets/demo/fields.json",
+  "mocks": "widgets/demo/mocks/index.json",
+  "notes": "Notas internas"
+}
+```
+
+El validador del laboratorio comprueba campos obligatorios, dimensiones positivas y carga de `html`, `css`, `js`, `fields` y `mocks`. Los errores se muestran en pantalla.
+
 ## Crear widgets
 
 1. Crea una carpeta dentro de `widgets/`.
-2. Anade `widget.json`, `widget.html`, `widget.css`, `widget.js` y `fields.json`.
-3. Registra el widget en `widgets/registry.json`.
+2. Anade `widget.html`, `widget.css`, `widget.js`, `fields.json` y mocks locales.
+3. Registra el widget completo en `widgets/registry.json`.
+4. Ejecuta `Validate widgets` antes de commitear.

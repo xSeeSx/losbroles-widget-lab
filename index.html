@@ -24,6 +24,49 @@
           <div id="widgetMeta" class="meta-block"></div>
         </section>
 
+        <section class="panel-section validation-panel" aria-label="Validacion de widgets">
+          <h2>Widget Store</h2>
+          <button id="validateWidgetsButton" type="button">Validate widgets</button>
+          <div id="validationSummary" class="validation-summary" role="status">Sin validar</div>
+          <ol id="validationResults" class="validation-results"></ol>
+        </section>
+
+        <section class="panel-section debug-panel" aria-label="Debug del widget">
+          <h2>Debug</h2>
+          <label class="toggle-row">
+            <input id="debugModeToggle" type="checkbox" checked>
+            <span>Mostrar logs del iframe</span>
+          </label>
+          <button id="copyDebugReportButton" type="button" class="secondary-button">Copy debug report</button>
+        </section>
+
+        <section class="panel-section responsive-panel" aria-label="Responsive preview">
+          <h2>Responsive</h2>
+          <label class="field-label" for="viewportPresetSelect">Preset</label>
+          <select id="viewportPresetSelect" class="select-input">
+            <option value="1920x1080">1920x1080</option>
+            <option value="1280x720">1280x720</option>
+            <option value="960x240">960x240</option>
+            <option value="800x200" selected>800x200</option>
+          </select>
+
+          <label class="field-label" for="zoomSelect">Zoom visual</label>
+          <select id="zoomSelect" class="select-input">
+            <option value="0.25">25%</option>
+            <option value="0.5">50%</option>
+            <option value="0.75">75%</option>
+            <option value="1" selected>100%</option>
+          </select>
+
+          <label class="field-label" for="previewBackgroundSelect">Fondo</label>
+          <select id="previewBackgroundSelect" class="select-input">
+            <option value="transparent">Transparente</option>
+            <option value="gray" selected>Gris</option>
+            <option value="chroma">Verde chroma</option>
+            <option value="dark">Captura oscura</option>
+          </select>
+        </section>
+
         <section class="panel-section button-stack" aria-label="Acciones">
           <button id="reloadWidgetButton" type="button">Reload widget</button>
           <button id="emitWidgetLoadButton" type="button" data-se-action="widgetLoad">onWidgetLoad</button>
@@ -47,12 +90,12 @@
 
         <section class="panel-section prediction-panel" aria-label="Twitch EventSub predicciones">
           <h2>Twitch Predictions</h2>
-          <label class="field-label" for="predictionTitle">Título</label>
-          <input id="predictionTitle" class="text-input" type="text" value="Quién gana la siguiente ronda?">
+          <label class="field-label" for="predictionTitle">Titulo</label>
+          <input id="predictionTitle" class="text-input" type="text" value="Quien gana la siguiente ronda?">
 
           <div class="split-fields">
             <label>
-              <span class="field-label">Duración</span>
+              <span class="field-label">Duracion</span>
               <input id="predictionDuration" class="text-input" type="number" min="1" step="1" value="60">
             </label>
             <label>
@@ -67,14 +110,14 @@
           <div id="predictionOutcomes" class="prediction-outcomes"></div>
 
           <div class="button-stack">
-            <button id="predictionCreateButton" type="button">Crear predicción</button>
-            <button id="predictionVoteOneButton" type="button">Sumar votos opción 1</button>
-            <button id="predictionVoteTwoButton" type="button">Sumar votos opción 2</button>
+            <button id="predictionCreateButton" type="button">Crear prediccion</button>
+            <button id="predictionVoteOneButton" type="button">Sumar votos opcion 1</button>
+            <button id="predictionVoteTwoButton" type="button">Sumar votos opcion 2</button>
             <button id="predictionVoteRandomButton" type="button">Sumar votos aleatorios</button>
-            <button id="predictionLockButton" type="button">Bloquear predicción</button>
-            <button id="predictionEndOneButton" type="button">Finalizar ganando opción 1</button>
-            <button id="predictionEndTwoButton" type="button">Finalizar ganando opción 2</button>
-            <button id="predictionCancelButton" type="button">Cancelar predicción</button>
+            <button id="predictionLockButton" type="button">Bloquear prediccion</button>
+            <button id="predictionEndOneButton" type="button">Finalizar ganando opcion 1</button>
+            <button id="predictionEndTwoButton" type="button">Finalizar ganando opcion 2</button>
+            <button id="predictionCancelButton" type="button">Cancelar prediccion</button>
             <button id="predictionResetButton" type="button" class="secondary-button">Reset total</button>
           </div>
         </section>
@@ -114,8 +157,10 @@
       </aside>
 
       <section class="preview-column" aria-label="Previsualizacion">
-        <div class="preview-shell">
-          <iframe id="widgetFrame" title="Widget preview" sandbox="allow-scripts"></iframe>
+        <div id="previewShell" class="preview-shell preview-bg-gray">
+          <div id="iframeViewport" class="iframe-viewport">
+            <iframe id="widgetFrame" title="Widget preview" sandbox="allow-scripts"></iframe>
+          </div>
         </div>
 
         <section class="console-panel" aria-label="Consola">

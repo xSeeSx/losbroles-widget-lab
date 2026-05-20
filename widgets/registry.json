@@ -4,8 +4,18 @@
     {
       "id": "demo",
       "name": "Demo widget",
-      "description": "Widget minimo para validar eventos mock de StreamElements.",
-      "path": "widgets/demo/widget.json"
+      "description": "Widget minimo para validar fields, eventos mock y el runtime del laboratorio.",
+      "version": "0.1.0",
+      "author": "LosBroles",
+      "category": "demo",
+      "width": 800,
+      "height": 200,
+      "html": "widgets/demo/widget.html",
+      "css": "widgets/demo/widget.css",
+      "js": "widgets/demo/widget.js",
+      "fields": "widgets/demo/fields.json",
+      "mocks": "widgets/demo/mocks/index.json",
+      "notes": "Widget de ejemplo interno. No es un widget real de produccion."
     }
   ]
 }
