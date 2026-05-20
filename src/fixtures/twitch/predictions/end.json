@@ -1,0 +1,51 @@
+{
+  "type": "channel.prediction.end",
+  "subscription": {
+    "type": "channel.prediction.end"
+  },
+  "event": {
+    "id": "prediction-0001",
+    "broadcaster_user_id": "mock-channel-id",
+    "broadcaster_user_login": "losbroles",
+    "broadcaster_user_name": "LosBroles",
+    "title": "Quien gana la siguiente ronda?",
+    "winning_outcome_id": "outcome-1",
+    "status": "resolved",
+    "outcomes": [
+      {
+        "id": "outcome-1",
+        "title": "Opcion 1",
+        "color": "blue",
+        "users": 3,
+        "channel_points": 1500,
+        "top_predictors": [
+          {
+            "user_id": "mock-predictor-001",
+            "user_login": "demo_user_1",
+            "user_name": "DemoUser1",
+            "channel_points_used": 700,
+            "channel_points_won": 1120
+          }
+        ]
+      },
+      {
+        "id": "outcome-2",
+        "title": "Opcion 2",
+        "color": "pink",
+        "users": 2,
+        "channel_points": 900,
+        "top_predictors": [
+          {
+            "user_id": "mock-predictor-002",
+            "user_login": "demo_user_2",
+            "user_name": "DemoUser2",
+            "channel_points_used": 500,
+            "channel_points_won": null
+          }
+        ]
+      }
+    ],
+    "started_at": "2026-05-20T10:00:00.000Z",
+    "ended_at": "2026-05-20T10:02:00.000Z"
+  }
+}

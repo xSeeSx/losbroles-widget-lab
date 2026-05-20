@@ -63,6 +63,24 @@
     console.info("onSessionUpdate received", event.detail);
   });
 
+  window.addEventListener("twitch:eventsub", (event) => {
+    const payload = event.detail || {};
+    const twitchEvent = payload.event || {};
+    const item = document.createElement("li");
+
+    item.textContent = `${payload.type}: ${twitchEvent.title || "Twitch EventSub"}`;
+    events.prepend(item);
+
+    while (events.children.length > state.maxEvents) {
+      events.lastElementChild.remove();
+    }
+
+    state.count += 1;
+    message.textContent = `Latest Twitch event: ${payload.type}`;
+    renderCounter();
+    console.info("twitch:eventsub received", payload);
+  });
+
   if (typeof window.__LAB_LOG__ === "function") {
     window.__LAB_LOG__("info", "Demo widget script ready");
   }

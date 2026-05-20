@@ -31,6 +31,7 @@ body {
 
 button,
 select,
+input,
 textarea {
   font: inherit;
 }
@@ -52,6 +53,7 @@ button:hover {
 
 button:focus-visible,
 select:focus-visible,
+input:focus-visible,
 textarea:focus-visible {
   outline: 3px solid rgba(15, 143, 140, 0.24);
   outline-offset: 2px;
@@ -109,7 +111,7 @@ textarea:focus-visible {
 
 .lab-layout {
   display: grid;
-  grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
+  grid-template-columns: minmax(300px, 380px) minmax(0, 1fr);
   min-height: calc(100vh - 82px);
 }
 
@@ -141,6 +143,7 @@ textarea:focus-visible {
 }
 
 .select-input,
+.text-input,
 .payload-input {
   width: 100%;
   border: 1px solid var(--line);
@@ -151,6 +154,11 @@ textarea:focus-visible {
 
 .select-input {
   min-height: 42px;
+  padding: 0 10px;
+}
+
+.text-input {
+  min-height: 40px;
   padding: 0 10px;
 }
 
@@ -201,6 +209,43 @@ textarea:focus-visible {
   font-weight: 650;
   line-height: 1.35;
   padding: 8px 10px;
+}
+
+.split-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+}
+
+.split-fields label {
+  display: grid;
+  gap: 6px;
+}
+
+.prediction-panel {
+  border-top: 1px solid var(--line);
+  padding-top: 16px;
+}
+
+.prediction-outcomes {
+  display: grid;
+  gap: 8px;
+}
+
+.prediction-outcome-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(72px, 0.55fr) minmax(72px, 0.55fr);
+  gap: 8px;
+  align-items: end;
+}
+
+.prediction-outcome-row label {
+  display: grid;
+  gap: 5px;
+}
+
+.prediction-outcome-row .field-label {
+  font-size: 0.74rem;
 }
 
 .meta-block {

@@ -18,6 +18,20 @@ const SE_FIXTURE_URLS = {
   sessionUpdate: new URL("./fixtures/streamelements/session-update.json", import.meta.url)
 };
 
+const TWITCH_PREDICTION_FIXTURE_URLS = {
+  begin: new URL("./fixtures/twitch/predictions/begin.json", import.meta.url),
+  progress: new URL("./fixtures/twitch/predictions/progress.json", import.meta.url),
+  lock: new URL("./fixtures/twitch/predictions/lock.json", import.meta.url),
+  end: new URL("./fixtures/twitch/predictions/end.json", import.meta.url)
+};
+
+const TWITCH_PREDICTION_TYPES = {
+  begin: "channel.prediction.begin",
+  progress: "channel.prediction.progress",
+  lock: "channel.prediction.lock",
+  end: "channel.prediction.end"
+};
+
 const SE_ACTIONS = {
   widgetLoad: {
     label: "onWidgetLoad",
@@ -64,6 +78,8 @@ const state = {
   fieldsSchema: {},
   fieldData: {},
   seFixtures: {},
+  twitchPredictionFixtures: {},
+  prediction: createDefaultPredictionState(),
   activePayloadType: "widgetLoad",
   payloadDrafts: {},
   logCount: 0
@@ -79,7 +95,11 @@ async function init() {
   writeLog("info", "lab", "Inicializando laboratorio");
 
   try {
-    await loadSEFixtures();
+    await Promise.all([
+      loadSEFixtures(),
+      loadTwitchPredictionFixtures()
+    ]);
+    renderPredictionControls();
     await loadRegistry();
     setStatus("Listo");
   } catch (error) {
@@ -98,6 +118,20 @@ function bindElements() {
   elements.eventPayload = document.querySelector("#eventPayload");
   elements.payloadError = document.querySelector("#payloadError");
   elements.payloadTypeLabel = document.querySelector("#payloadTypeLabel");
+  elements.predictionTitle = document.querySelector("#predictionTitle");
+  elements.predictionDuration = document.querySelector("#predictionDuration");
+  elements.predictionOutcomeCount = document.querySelector("#predictionOutcomeCount");
+  elements.predictionWinningOutcome = document.querySelector("#predictionWinningOutcome");
+  elements.predictionOutcomes = document.querySelector("#predictionOutcomes");
+  elements.predictionCreateButton = document.querySelector("#predictionCreateButton");
+  elements.predictionVoteOneButton = document.querySelector("#predictionVoteOneButton");
+  elements.predictionVoteTwoButton = document.querySelector("#predictionVoteTwoButton");
+  elements.predictionVoteRandomButton = document.querySelector("#predictionVoteRandomButton");
+  elements.predictionLockButton = document.querySelector("#predictionLockButton");
+  elements.predictionEndOneButton = document.querySelector("#predictionEndOneButton");
+  elements.predictionEndTwoButton = document.querySelector("#predictionEndTwoButton");
+  elements.predictionCancelButton = document.querySelector("#predictionCancelButton");
+  elements.predictionResetButton = document.querySelector("#predictionResetButton");
   elements.fieldsList = document.querySelector("#fieldsList");
   elements.frame = document.querySelector("#widgetFrame");
   elements.logList = document.querySelector("#logList");
@@ -126,6 +160,33 @@ function bindEvents() {
     validatePayloadEditor();
   });
 
+  elements.predictionTitle.addEventListener("input", () => {
+    state.prediction.title = elements.predictionTitle.value;
+  });
+
+  elements.predictionDuration.addEventListener("input", () => {
+    state.prediction.durationSeconds = clampInteger(elements.predictionDuration.value, 1, 86400);
+  });
+
+  elements.predictionOutcomeCount.addEventListener("change", () => {
+    setPredictionOutcomeCount(elements.predictionOutcomeCount.value);
+  });
+
+  elements.predictionWinningOutcome.addEventListener("change", () => {
+    state.prediction.winningOutcomeId = elements.predictionWinningOutcome.value || null;
+  });
+
+  elements.predictionOutcomes.addEventListener("input", handlePredictionOutcomeInput);
+  elements.predictionCreateButton.addEventListener("click", createPrediction);
+  elements.predictionVoteOneButton.addEventListener("click", () => addVotesToOutcome(0));
+  elements.predictionVoteTwoButton.addEventListener("click", () => addVotesToOutcome(1));
+  elements.predictionVoteRandomButton.addEventListener("click", addRandomPredictionVotes);
+  elements.predictionLockButton.addEventListener("click", lockPrediction);
+  elements.predictionEndOneButton.addEventListener("click", () => endPrediction(0));
+  elements.predictionEndTwoButton.addEventListener("click", () => endPrediction(1));
+  elements.predictionCancelButton.addEventListener("click", cancelPrediction);
+  elements.predictionResetButton.addEventListener("click", resetPrediction);
+
   elements.clearLogsButton.addEventListener("click", clearLogs);
   elements.frame.addEventListener("load", () => {
     if (state.selectedWidget) {
@@ -142,6 +203,14 @@ async function loadSEFixtures() {
   );
 
   state.seFixtures = Object.fromEntries(entries);
+}
+
+async function loadTwitchPredictionFixtures() {
+  const entries = await Promise.all(
+    Object.entries(TWITCH_PREDICTION_FIXTURE_URLS).map(async ([key, url]) => [key, await fetchJson(url)])
+  );
+
+  state.twitchPredictionFixtures = Object.fromEntries(entries);
 }
 
 async function loadRegistry() {
@@ -354,6 +423,407 @@ function setPayloadError(message) {
 function clearPayloadError() {
   elements.payloadError.textContent = "";
   elements.payloadError.hidden = true;
+}
+
+function createDefaultPredictionState() {
+  return {
+    id: "prediction-0001",
+    title: "Quien gana la siguiente ronda?",
+    durationSeconds: 60,
+    status: "idle",
+    startedAt: null,
+    locksAt: null,
+    lockedAt: null,
+    endedAt: null,
+    winningOutcomeId: "outcome-1",
+    outcomes: [
+      createPredictionOutcome(1),
+      createPredictionOutcome(2)
+    ]
+  };
+}
+
+function createPredictionOutcome(number) {
+  return {
+    id: `outcome-${number}`,
+    title: `Opcion ${number}`,
+    color: number % 2 === 0 ? "pink" : "blue",
+    users: 0,
+    channelPoints: 0
+  };
+}
+
+function renderPredictionControls() {
+  elements.predictionTitle.value = state.prediction.title;
+  elements.predictionDuration.value = String(state.prediction.durationSeconds);
+  elements.predictionOutcomeCount.value = String(state.prediction.outcomes.length);
+  renderPredictionWinningOptions();
+  renderPredictionOutcomeRows();
+}
+
+function renderPredictionWinningOptions() {
+  elements.predictionWinningOutcome.replaceChildren();
+
+  const emptyOption = document.createElement("option");
+  emptyOption.value = "";
+  emptyOption.textContent = "sin ganador";
+  elements.predictionWinningOutcome.append(emptyOption);
+
+  for (const outcome of state.prediction.outcomes) {
+    const option = document.createElement("option");
+    option.value = outcome.id;
+    option.textContent = `${outcome.id} - ${outcome.title}`;
+    elements.predictionWinningOutcome.append(option);
+  }
+
+  if (!state.prediction.outcomes.some((outcome) => outcome.id === state.prediction.winningOutcomeId)) {
+    state.prediction.winningOutcomeId = state.prediction.outcomes[0]?.id || null;
+  }
+
+  elements.predictionWinningOutcome.value = state.prediction.winningOutcomeId || "";
+}
+
+function renderPredictionOutcomeRows() {
+  elements.predictionOutcomes.replaceChildren();
+
+  state.prediction.outcomes.forEach((outcome, index) => {
+    const row = document.createElement("div");
+    row.className = "prediction-outcome-row";
+    row.append(
+      createPredictionInput(index, "title", `Opcion ${index + 1}`, outcome.title, "text"),
+      createPredictionInput(index, "users", "Usuarios", outcome.users, "number"),
+      createPredictionInput(index, "channelPoints", "Puntos", outcome.channelPoints, "number")
+    );
+    elements.predictionOutcomes.append(row);
+  });
+}
+
+function createPredictionInput(index, field, label, value, type) {
+  const wrapper = document.createElement("label");
+  const labelNode = document.createElement("span");
+  const input = document.createElement("input");
+
+  labelNode.className = "field-label";
+  labelNode.textContent = label;
+  input.className = "text-input";
+  input.type = type;
+  input.value = String(value);
+  input.dataset.outcomeIndex = String(index);
+  input.dataset.outcomeField = field;
+
+  if (type === "number") {
+    input.min = "0";
+    input.step = "1";
+  }
+
+  wrapper.append(labelNode, input);
+  return wrapper;
+}
+
+function handlePredictionOutcomeInput(event) {
+  const input = event.target;
+  const index = Number(input.dataset.outcomeIndex);
+  const field = input.dataset.outcomeField;
+
+  if (!field || Number.isNaN(index) || !state.prediction.outcomes[index]) {
+    return;
+  }
+
+  if (field === "title") {
+    state.prediction.outcomes[index].title = input.value;
+    renderPredictionWinningOptions();
+    return;
+  }
+
+  state.prediction.outcomes[index][field] = clampInteger(input.value, 0, 999999999);
+}
+
+function setPredictionOutcomeCount(value) {
+  syncPredictionFromControls();
+
+  const nextCount = clampInteger(value, 2, 10);
+  elements.predictionOutcomeCount.value = String(nextCount);
+  resizePredictionOutcomes(nextCount);
+  renderPredictionControls();
+}
+
+function syncPredictionFromControls() {
+  state.prediction.title = elements.predictionTitle.value.trim() || "Prediccion de prueba";
+  state.prediction.durationSeconds = clampInteger(elements.predictionDuration.value, 1, 86400);
+  state.prediction.winningOutcomeId = elements.predictionWinningOutcome.value || null;
+
+  for (const input of elements.predictionOutcomes.querySelectorAll("[data-outcome-field]")) {
+    const index = Number(input.dataset.outcomeIndex);
+    const field = input.dataset.outcomeField;
+
+    if (!state.prediction.outcomes[index]) {
+      continue;
+    }
+
+    if (field === "title") {
+      state.prediction.outcomes[index].title = input.value.trim() || `Opcion ${index + 1}`;
+    } else {
+      state.prediction.outcomes[index][field] = clampInteger(input.value, 0, 999999999);
+    }
+  }
+
+  resizePredictionOutcomes(clampInteger(elements.predictionOutcomeCount.value, 2, 10));
+}
+
+function resizePredictionOutcomes(nextCount) {
+  while (state.prediction.outcomes.length < nextCount) {
+    state.prediction.outcomes.push(createPredictionOutcome(state.prediction.outcomes.length + 1));
+  }
+
+  state.prediction.outcomes = state.prediction.outcomes.slice(0, nextCount);
+
+  if (!state.prediction.outcomes.some((outcome) => outcome.id === state.prediction.winningOutcomeId)) {
+    state.prediction.winningOutcomeId = state.prediction.outcomes[0]?.id || null;
+  }
+}
+
+function createPrediction() {
+  syncPredictionFromControls();
+  startPredictionWindow();
+  state.prediction.status = "active";
+  state.prediction.lockedAt = null;
+  state.prediction.endedAt = null;
+  emitTwitchPredictionPayload(buildPredictionPayload("begin"));
+}
+
+function addVotesToOutcome(index) {
+  syncPredictionFromControls();
+  ensurePredictionStarted();
+  addPredictionVote(index, 1, 500);
+  renderPredictionControls();
+  emitTwitchPredictionPayload(buildPredictionPayload("progress"));
+}
+
+function addRandomPredictionVotes() {
+  syncPredictionFromControls();
+  ensurePredictionStarted();
+
+  for (let index = 0; index < state.prediction.outcomes.length; index += 1) {
+    const users = Math.floor(Math.random() * 4) + 1;
+    const points = users * (Math.floor(Math.random() * 9) + 2) * 100;
+    addPredictionVote(index, users, points);
+  }
+
+  renderPredictionControls();
+  emitTwitchPredictionPayload(buildPredictionPayload("progress"));
+}
+
+function addPredictionVote(index, users, points) {
+  const outcome = state.prediction.outcomes[index];
+
+  if (!outcome) {
+    writeLog("warn", "lab", `No existe la opcion ${index + 1} para sumar votos`);
+    return;
+  }
+
+  outcome.users += users;
+  outcome.channelPoints += points;
+}
+
+function lockPrediction() {
+  syncPredictionFromControls();
+  ensurePredictionStarted();
+  state.prediction.status = "locked";
+  state.prediction.lockedAt = new Date().toISOString();
+  emitTwitchPredictionPayload(buildPredictionPayload("lock"));
+}
+
+function endPrediction(winnerIndex) {
+  syncPredictionFromControls();
+  ensurePredictionStarted();
+
+  const winner = state.prediction.outcomes[winnerIndex];
+
+  if (!winner) {
+    writeLog("warn", "lab", `No existe la opcion ${winnerIndex + 1} para finalizar`);
+    return;
+  }
+
+  state.prediction.status = "resolved";
+  state.prediction.winningOutcomeId = winner.id;
+  state.prediction.endedAt = new Date().toISOString();
+  renderPredictionWinningOptions();
+  emitTwitchPredictionPayload(buildPredictionPayload("end"));
+}
+
+function cancelPrediction() {
+  syncPredictionFromControls();
+  ensurePredictionStarted();
+  state.prediction.status = "canceled";
+  state.prediction.winningOutcomeId = null;
+  state.prediction.endedAt = new Date().toISOString();
+  renderPredictionWinningOptions();
+  emitTwitchPredictionPayload(buildPredictionPayload("end"));
+}
+
+function resetPrediction() {
+  state.prediction = createDefaultPredictionState();
+  renderPredictionControls();
+  writeLog("info", "lab", "Evento emitido: twitch.prediction.reset", {
+    timestamp: new Date().toISOString(),
+    summary: summarizePredictionState()
+  });
+}
+
+function ensurePredictionStarted() {
+  if (!state.prediction.startedAt || ["idle", "resolved", "canceled"].includes(state.prediction.status)) {
+    startPredictionWindow();
+    state.prediction.status = "active";
+  }
+}
+
+function startPredictionWindow() {
+  const startedAt = new Date();
+  state.prediction.startedAt = startedAt.toISOString();
+  state.prediction.locksAt = new Date(startedAt.getTime() + state.prediction.durationSeconds * 1000).toISOString();
+  state.prediction.lockedAt = null;
+  state.prediction.endedAt = null;
+}
+
+function buildPredictionPayload(stage) {
+  const type = TWITCH_PREDICTION_TYPES[stage];
+  const fixture = cloneJson(state.twitchPredictionFixtures[stage] || {
+    type,
+    subscription: { type },
+    event: {}
+  });
+  const event = {
+    ...fixture.event,
+    id: state.prediction.id,
+    broadcaster_user_id: "mock-channel-id",
+    broadcaster_user_login: "losbroles",
+    broadcaster_user_name: "LosBroles",
+    title: state.prediction.title,
+    outcomes: buildPredictionOutcomes(stage === "end"),
+    started_at: state.prediction.startedAt
+  };
+
+  if (stage === "begin" || stage === "progress") {
+    event.locks_at = state.prediction.locksAt;
+    delete event.locked_at;
+    delete event.ended_at;
+    delete event.status;
+    delete event.winning_outcome_id;
+  }
+
+  if (stage === "lock") {
+    event.locked_at = state.prediction.lockedAt || new Date().toISOString();
+    delete event.locks_at;
+    delete event.ended_at;
+    delete event.status;
+    delete event.winning_outcome_id;
+  }
+
+  if (stage === "end") {
+    event.status = state.prediction.status === "canceled" ? "canceled" : "resolved";
+    event.winning_outcome_id = event.status === "resolved" ? state.prediction.winningOutcomeId : null;
+    event.ended_at = state.prediction.endedAt || new Date().toISOString();
+    delete event.locks_at;
+    delete event.locked_at;
+  }
+
+  return {
+    ...fixture,
+    type,
+    subscription: {
+      ...fixture.subscription,
+      type
+    },
+    event
+  };
+}
+
+function buildPredictionOutcomes(includeWinnings) {
+  return state.prediction.outcomes.map((outcome, index) => {
+    const isWinner = state.prediction.winningOutcomeId === outcome.id;
+
+    return {
+      id: outcome.id,
+      title: outcome.title,
+      color: outcome.color || (index % 2 === 0 ? "blue" : "pink"),
+      users: outcome.users,
+      channel_points: outcome.channelPoints,
+      top_predictors: buildTopPredictors(outcome, index, includeWinnings && isWinner)
+    };
+  });
+}
+
+function buildTopPredictors(outcome, index, includeWinnings) {
+  if (outcome.users < 1 || outcome.channelPoints < 1) {
+    return [];
+  }
+
+  const used = Math.max(1, Math.round(outcome.channelPoints / Math.max(1, outcome.users)));
+  const predictor = {
+    user_id: `mock-predictor-${String(index + 1).padStart(3, "0")}`,
+    user_login: `prediction_user_${index + 1}`,
+    user_name: `PredictionUser${index + 1}`,
+    channel_points_used: used
+  };
+
+  if (includeWinnings) {
+    predictor.channel_points_won = Math.round(used * 1.6);
+  }
+
+  return [predictor];
+}
+
+function emitTwitchPredictionPayload(payload) {
+  const frameWindow = elements.frame.contentWindow;
+  const timestamp = new Date().toISOString();
+  const summary = summarizePredictionPayload(payload);
+
+  if (!frameWindow) {
+    writeLog("error", "lab", "Iframe no disponible");
+    return;
+  }
+
+  frameWindow.postMessage({
+    source: LAB_SOURCE,
+    type: "TWITCH_EVENTSUB_EMIT",
+    payload
+  }, "*");
+
+  writeLog("info", "lab", `Evento emitido: ${payload.type}`, {
+    timestamp,
+    summary,
+    payload
+  });
+}
+
+function summarizePredictionPayload(payload) {
+  const outcomes = payload.event.outcomes || [];
+
+  return {
+    type: payload.type,
+    title: payload.event.title,
+    status: payload.event.status || state.prediction.status,
+    winning_outcome_id: payload.event.winning_outcome_id || null,
+    total_users: outcomes.reduce((total, outcome) => total + Number(outcome.users || 0), 0),
+    total_channel_points: outcomes.reduce((total, outcome) => total + Number(outcome.channel_points || 0), 0),
+    outcomes: outcomes.map((outcome) => ({
+      id: outcome.id,
+      title: outcome.title,
+      users: outcome.users,
+      channel_points: outcome.channel_points
+    }))
+  };
+}
+
+function summarizePredictionState() {
+  return {
+    title: state.prediction.title,
+    status: state.prediction.status,
+    outcome_count: state.prediction.outcomes.length,
+    winning_outcome_id: state.prediction.winningOutcomeId,
+    total_users: state.prediction.outcomes.reduce((total, outcome) => total + outcome.users, 0),
+    total_channel_points: state.prediction.outcomes.reduce((total, outcome) => total + outcome.channelPoints, 0)
+  };
 }
 
 function renderIframe({ manifest, html, css, script, fieldsSchema, fieldData, harnessScripts }) {
@@ -642,6 +1112,16 @@ function stringifyLogData(data) {
 
 function cloneJson(value) {
   return JSON.parse(JSON.stringify(value));
+}
+
+function clampInteger(value, min, max) {
+  const number = Number.parseInt(value, 10);
+
+  if (Number.isNaN(number)) {
+    return min;
+  }
+
+  return Math.min(Math.max(number, min), max);
 }
 
 function escapeHtml(value) {

@@ -9,6 +9,7 @@ Laboratorio estatico para probar widgets de StreamElements y Twitch sin emitir e
 /src/app.js
 /src/styles.css
 /src/fixtures/streamelements/
+/src/fixtures/twitch/predictions/
 /src/harness/se-mock.js
 /src/harness/twitch-eventsub-mock.js
 /src/harness/worker-mock.js
@@ -47,6 +48,7 @@ El despliegue automatico se ejecuta con GitHub Actions desde `.github/workflows/
 - Los botones emiten payloads mock de StreamElements: `onWidgetLoad`, chat message, follow, subscriber, tip, cheer y `kvstore:update`.
 - El editor JSON muestra el payload del ultimo boton usado. Edita el JSON y pulsa el mismo boton para reenviarlo con cambios.
 - La validacion JSON aparece en pantalla y bloquea el envio cuando el payload no es valido.
+- El panel Twitch Predictions simula el ciclo EventSub de predicciones: begin, progress, lock y end.
 - La consola en pantalla recibe logs del laboratorio y del widget aislado.
 
 ## Mock de StreamElements
@@ -66,6 +68,31 @@ El despliegue automatico se ejecuta con GitHub Actions desde `.github/workflows/
 Los eventos se entregan con `window.addEventListener("onWidgetLoad", handler)`, `window.addEventListener("onEventReceived", handler)` y `window.addEventListener("onSessionUpdate", handler)`, usando `event.detail` como en widgets reales. El canal de prueba usa `username: "losbroles"` y `apiToken: "fake-api-token-never-real"`.
 
 Los payloads de ejemplo estan en `src/fixtures/streamelements/`.
+
+## Mock de Twitch EventSub
+
+`src/harness/twitch-eventsub-mock.js` emite predicciones con este formato:
+
+```json
+{
+  "type": "channel.prediction.begin",
+  "subscription": {
+    "type": "channel.prediction.begin"
+  },
+  "event": {}
+}
+```
+
+Tipos soportados:
+
+- `channel.prediction.begin`
+- `channel.prediction.progress`
+- `channel.prediction.lock`
+- `channel.prediction.end`
+
+El panel permite configurar titulo, duracion, numero de opciones, nombre de cada opcion, usuarios, puntos y `winning_outcome_id`. Cada accion registra en la consola el evento emitido, timestamp y resumen del payload.
+
+Los payloads base estan en `src/fixtures/twitch/predictions/`.
 
 ## Crear widgets
 

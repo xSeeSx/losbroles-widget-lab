@@ -45,6 +45,40 @@
           <div id="payloadError" class="payload-error" role="alert" hidden></div>
         </section>
 
+        <section class="panel-section prediction-panel" aria-label="Twitch EventSub predicciones">
+          <h2>Twitch Predictions</h2>
+          <label class="field-label" for="predictionTitle">Título</label>
+          <input id="predictionTitle" class="text-input" type="text" value="Quién gana la siguiente ronda?">
+
+          <div class="split-fields">
+            <label>
+              <span class="field-label">Duración</span>
+              <input id="predictionDuration" class="text-input" type="number" min="1" step="1" value="60">
+            </label>
+            <label>
+              <span class="field-label">Opciones</span>
+              <input id="predictionOutcomeCount" class="text-input" type="number" min="2" max="10" step="1" value="2">
+            </label>
+          </div>
+
+          <label class="field-label" for="predictionWinningOutcome">winning_outcome_id</label>
+          <select id="predictionWinningOutcome" class="select-input"></select>
+
+          <div id="predictionOutcomes" class="prediction-outcomes"></div>
+
+          <div class="button-stack">
+            <button id="predictionCreateButton" type="button">Crear predicción</button>
+            <button id="predictionVoteOneButton" type="button">Sumar votos opción 1</button>
+            <button id="predictionVoteTwoButton" type="button">Sumar votos opción 2</button>
+            <button id="predictionVoteRandomButton" type="button">Sumar votos aleatorios</button>
+            <button id="predictionLockButton" type="button">Bloquear predicción</button>
+            <button id="predictionEndOneButton" type="button">Finalizar ganando opción 1</button>
+            <button id="predictionEndTwoButton" type="button">Finalizar ganando opción 2</button>
+            <button id="predictionCancelButton" type="button">Cancelar predicción</button>
+            <button id="predictionResetButton" type="button" class="secondary-button">Reset total</button>
+          </div>
+        </section>
+
         <section class="panel-section">
           <h2>Fields</h2>
           <dl id="fieldsList" class="fields-list"></dl>
