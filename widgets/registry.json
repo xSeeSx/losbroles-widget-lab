@@ -32,6 +32,22 @@
       "fields": "widgets/marco/fields.json",
       "mocks": "widgets/marco/mocks/index.json",
       "notes": "Widget real importado desde incoming/marco."
+    },
+    {
+      "id": "prediccion",
+      "name": "Prediccion",
+      "description": "Widget real de predicciones importado desde StreamElements para pruebas en laboratorio.",
+      "version": "0.1.0",
+      "author": "LosBroles",
+      "category": "streamelements",
+      "width": 1920,
+      "height": 1080,
+      "html": "widgets/prediccion/widget.html",
+      "css": "widgets/prediccion/widget.css",
+      "js": "widgets/prediccion/widget.js",
+      "fields": "widgets/prediccion/fields.json",
+      "mocks": "widgets/prediccion/mocks/index.json",
+      "notes": "Widget real de predicciones importado desde incoming/prediccion."
     }
   ]
 }
