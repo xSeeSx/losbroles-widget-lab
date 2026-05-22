@@ -16,7 +16,22 @@
       "fields": "widgets/demo/fields.json",
       "mocks": "widgets/demo/mocks/index.json",
       "notes": "Widget de ejemplo interno. No es un widget real de produccion."
+    },
+    {
+      "id": "marco",
+      "name": "Marco",
+      "description": "Widget real marco importado desde StreamElements para pruebas en laboratorio.",
+      "version": "0.1.0",
+      "author": "LosBroles",
+      "category": "streamelements",
+      "width": 1920,
+      "height": 1080,
+      "html": "widgets/marco/widget.html",
+      "css": "widgets/marco/widget.css",
+      "js": "widgets/marco/widget.js",
+      "fields": "widgets/marco/fields.json",
+      "mocks": "widgets/marco/mocks/index.json",
+      "notes": "Widget real importado desde incoming/marco."
     }
   ]
 }
-

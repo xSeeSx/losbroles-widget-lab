@@ -1,0 +1,87 @@
+{
+  "seeSActive": {
+    "type": "checkbox",
+    "label": "SeeS",
+    "value": true
+  },
+  "roolesActive": {
+    "type": "checkbox",
+    "label": "Rooles",
+    "value": true
+  },
+  "ninjaTActive": {
+    "type": "checkbox",
+    "label": "NinjaT",
+    "value": true
+  },
+  "seeSFrame": {
+    "type": "video-input",
+    "label": "Marco SeeS",
+    "group": "SeeS"
+  },
+  "roolesFrame": {
+    "type": "video-input",
+    "label": "Marco Rooles",
+    "group": "Rooles"
+  },
+  "ninjaTFrame": {
+    "type": "video-input",
+    "label": "Marco NinjaT",
+    "group": "NinjaT"
+  },
+  "todosFrame": {
+    "type": "video-input",
+    "label": "Marco Todos",
+    "group": "Todos"
+  },
+  "seeSPosX": {
+    "type": "number",
+    "label": "Posición X SeeS",
+    "value": 100,
+    "group": "SeeS"
+  },
+  "seeSPosY": {
+    "type": "number",
+    "label": "Posición Y SeeS",
+    "value": 100,
+    "group": "SeeS"
+  },
+  "roolesPosX": {
+    "type": "number",
+    "label": "Posición X Rooles",
+    "value": 200,
+    "group": "Rooles"
+  },
+  "roolesPosY": {
+    "type": "number",
+    "label": "Posición Y Rooles",
+    "value": 100,
+    "group": "Rooles"
+  },
+  "ninjaTPosX": {
+    "type": "number",
+    "label": "Posición X NinjaT",
+    "value": 300,
+    "group": "NinjaT"
+  },
+  "ninjaTPosY": {
+    "type": "number",
+    "label": "Posición Y NinjaT",
+    "value": 100,
+    "group": "NinjaT"
+  },
+  "controllerIcon": {
+    "type": "image-input",
+    "label": "Icono de Mando"
+  },
+  "debugVisible": {
+    "type": "checkbox",
+    "label": "Mostrar Debug",
+    "value": false
+  },
+  "iconScale": {
+    "type": "number",
+    "label": "Escala Icono",
+    "value": 1
+  }
+}
