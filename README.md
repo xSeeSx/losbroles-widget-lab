@@ -151,6 +151,8 @@ El panel Worker WebSocket incluye:
 - botones para enviar `welcome`, `bridge.error` y predicciones `begin`, `progress`, `lock`, `end`;
 - consola de conexiones WebSocket mock.
 
+Cuando el widget activo es `Prediccion`, el laboratorio tambien reenvia los eventos del panel `Twitch Predictions` por el WebSocket mock, porque ese widget real espera recibir predicciones como JSON de Worker y no escucha el evento interno `twitch:eventsub`.
+
 Los mensajes de prediccion enviados por el mock del Worker usan el mismo contrato de Twitch EventSub:
 
 ```json

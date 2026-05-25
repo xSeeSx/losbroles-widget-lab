@@ -43,7 +43,10 @@
   }
 
   function isWorkerSocketUrl(url) {
-    return String(url || "").includes("/ws");
+    const value = String(url || "");
+
+    return value.includes("/ws")
+      || (workerUrl && (value === workerUrl || value.startsWith(workerUrl)));
   }
 
   function shouldIntercept(url) {
@@ -118,6 +121,17 @@
       super();
 
       if (!shouldIntercept(url) && typeof NativeWebSocket === "function") {
+        emitWorkerConsole({
+          kind: "connection.native",
+          connectionId: "-",
+          url: String(url),
+          summary: "WebSocket not intercepted; falling back to native WebSocket",
+          payload: {
+            interceptWebSocket: interceptWorkerWebSocket,
+            workerUrl,
+            expected: "Mock intercepts URLs containing /ws or the configured Worker URL."
+          }
+        });
         return typeof protocols === "undefined"
           ? new NativeWebSocket(url)
           : new NativeWebSocket(url, protocols);
@@ -246,6 +260,7 @@
 
   function broadcast(payload) {
     let delivered = 0;
+    const openConnections = connections.size;
 
     for (const socket of connections.values()) {
       socket.receive(payload);
@@ -257,7 +272,9 @@
       connectionId: "*",
       url: workerUrl || "mock",
       summary: `Broadcast delivered to ${delivered} mocked WebSocket connection${delivered === 1 ? "" : "s"}`,
-      payload: clone(payload)
+      payload: clone(payload),
+      delivered,
+      openConnections
     });
 
     return delivered;

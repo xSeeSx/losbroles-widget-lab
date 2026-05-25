@@ -120,7 +120,8 @@ const state = {
   worker: {
     interceptWebSocket: true,
     workerUrl: "",
-    connectionLogCount: 0
+    connectionLogCount: 0,
+    openConnections: new Map()
   },
   chat: {
     lastPayload: null,
@@ -1608,12 +1609,31 @@ function emitTwitchPredictionPayload(payload) {
     type: "TWITCH_EVENTSUB_EMIT",
     payload
   }, "*");
+  mirrorPredictionPayloadToWorkerForActiveWidget(payload, "Twitch Predictions");
 
   writeLog("info", "lab", `Evento emitido: ${payload.type}`, {
     timestamp,
     summary,
     payload
   });
+}
+
+function mirrorPredictionPayloadToWorkerForActiveWidget(payload, sourceLabel) {
+  if (state.selectedWidget?.id !== "prediccion") {
+    return;
+  }
+
+  writeLog("info", "lab", "Prediccion compatibility adapter active", {
+    source: sourceLabel,
+    reason: "El widget prediccion no escucha twitch:eventsub; espera JSON por WebSocket y usa msg.subscription?.type || msg.type junto con msg.event.",
+    expectedShape: {
+      type: "channel.prediction.*",
+      subscription: { type: "channel.prediction.*" },
+      event: "{ title, outcomes, locks_at | locked_at | ended_at, status, winning_outcome_id }"
+    },
+    openMockWebSockets: state.worker.openConnections.size
+  });
+  postWorkerBroadcast("WORKER_MOCK_BROADCAST", payload, `Prediccion compat ${payload.type}`);
 }
 
 function summarizePredictionPayload(payload) {
@@ -1712,6 +1732,17 @@ function sendWorkerPrediction(stage) {
 }
 
 function postWorkerBroadcast(type, payload, label) {
+  if (type !== "WORKER_MOCK_CONFIG" && state.worker.openConnections.size === 0) {
+    writeLog("warn", "lab", "No mocked WebSocket connections open. The widget may not have connected yet or the URL was not intercepted.", {
+      label,
+      activeWidget: state.selectedWidget?.id || null,
+      workerUrl: state.worker.workerUrl,
+      interceptWebSocket: state.worker.interceptWebSocket,
+      expectedIntercept: "Worker mock intercepts WebSocket URLs containing /ws or the configured Worker URL.",
+      payloadSummary: summarizeWorkerPayload(payload)
+    });
+  }
+
   postToWidgetFrames({
     source: LAB_SOURCE,
     type,
@@ -1721,6 +1752,7 @@ function postWorkerBroadcast(type, payload, label) {
   writeLog("info", "lab", `${label} broadcast solicitado`, {
     timestamp: new Date().toISOString(),
     summary: summarizeWorkerPayload(payload),
+    openMockWebSockets: state.worker.openConnections.size,
     payload
   });
 }
@@ -1761,6 +1793,7 @@ function appendWorkerConnectionLog(entry) {
   const title = document.createElement("strong");
   const meta = document.createElement("code");
 
+  updateWorkerOpenConnections(entry);
   item.className = "worker-connection-entry";
   title.textContent = `${entry.kind || "worker"} - ${entry.summary || ""}`;
   meta.textContent = `${entry.timestamp || new Date().toISOString()} | ${entry.connectionId || "-"} | ${entry.url || ""}`;
@@ -1780,6 +1813,55 @@ function appendWorkerConnectionLog(entry) {
 
   state.worker.connectionLogCount += 1;
   updateWorkerConnectionCount();
+
+  if (entry.kind === "connection.opening") {
+    writeLog("info", "lab", "Widget created WebSocket", {
+      connectionId: entry.connectionId,
+      url: entry.url,
+      intercepted: true
+    });
+  }
+
+  if (entry.kind === "connection.open") {
+    writeLog("info", "lab", "Mocked WebSocket intercepted and opened", {
+      connectionId: entry.connectionId,
+      url: entry.url,
+      openMockWebSockets: state.worker.openConnections.size
+    });
+  }
+
+  if (entry.kind === "connection.native") {
+    writeLog("warn", "lab", "Worker WebSocket was not intercepted", {
+      url: entry.url,
+      payload: entry.payload
+    });
+  }
+
+  if (entry.kind === "broadcast" && Number(entry.delivered || 0) === 0) {
+    writeLog("warn", "lab", "No mocked WebSocket connections open. The widget may not have connected yet or the URL was not intercepted.", {
+      openConnections: entry.openConnections || 0,
+      payload: entry.payload
+    });
+  }
+}
+
+function updateWorkerOpenConnections(entry) {
+  const connectionId = entry.connectionId;
+
+  if (!connectionId || connectionId === "*" || connectionId === "-") {
+    return;
+  }
+
+  if (entry.kind === "connection.open" || entry.kind === "connection.opening") {
+    state.worker.openConnections.set(connectionId, {
+      url: entry.url,
+      openedAt: entry.timestamp || new Date().toISOString()
+    });
+  }
+
+  if (entry.kind === "connection.close") {
+    state.worker.openConnections.delete(connectionId);
+  }
 }
 
 function updateWorkerConnectionCount() {
