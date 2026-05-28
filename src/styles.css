@@ -299,6 +299,19 @@ textarea:focus-visible {
   gap: 6px;
 }
 
+.segmented-controls,
+.quick-buttons {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.quick-buttons button {
+  min-height: 36px;
+  padding: 0 8px;
+  font-size: 0.8rem;
+}
+
 .prediction-panel {
   border-top: 1px solid var(--line);
   padding-top: 16px;
@@ -528,6 +541,12 @@ textarea:focus-visible {
   color: var(--danger);
 }
 
+.validation-summary.has-warnings {
+  border-color: rgba(166, 95, 0, 0.34);
+  background: rgba(166, 95, 0, 0.08);
+  color: var(--warning);
+}
+
 .validation-results {
   display: grid;
   gap: 6px;
@@ -610,8 +629,11 @@ textarea:focus-visible {
 }
 
 .preview-shell {
-  display: grid;
-  place-items: start center;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 18px;
   min-width: 0;
   overflow: auto;
   padding: 18px;
@@ -647,7 +669,47 @@ textarea:focus-visible {
   box-shadow: var(--shadow);
 }
 
-#widgetFrame {
+.iframe-viewport::before {
+  content: attr(data-overlay-id);
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 2;
+  border: 1px solid rgba(255, 255, 255, 0.38);
+  border-radius: 999px;
+  background: rgba(17, 24, 31, 0.78);
+  color: #ffffff;
+  font-size: 0.72rem;
+  font-weight: 800;
+  padding: 3px 7px;
+  pointer-events: none;
+}
+
+.iframe-viewport.is-active-overlay {
+  outline: 3px solid rgba(15, 143, 140, 0.54);
+  outline-offset: 3px;
+}
+
+.iframe-viewport.is-overlay-hidden {
+  opacity: 0.26;
+  filter: grayscale(1);
+}
+
+.iframe-viewport.is-overlay-hidden::after {
+  content: "hidden";
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: grid;
+  place-items: center;
+  background: rgba(17, 24, 31, 0.62);
+  color: #ffffff;
+  font-size: 1rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+iframe[data-overlay-id] {
   display: block;
   position: absolute;
   top: 0;

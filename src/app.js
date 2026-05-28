@@ -38,6 +38,26 @@ const TWITCH_PREDICTION_TYPES = {
   end: "channel.prediction.end"
 };
 
+const PREDICTION_LIMITS = {
+  titleMax: 45,
+  outcomeTitleMax: 25,
+  durationMin: 30,
+  durationMax: 1800,
+  outcomesMin: 2,
+  outcomesMax: 10
+};
+
+const PREDICTION_STATE_LABELS = [
+  "idle",
+  "active",
+  "active_expired",
+  "locked",
+  "locked_waiting_resolution",
+  "resolved",
+  "canceled",
+  "stale"
+];
+
 const REQUIRED_WIDGET_FIELDS = [
   "id",
   "name",
@@ -120,9 +140,24 @@ const state = {
   worker: {
     interceptWebSocket: true,
     workerUrl: "",
+    replayMode: "welcome",
     connectionLogCount: 0,
     openConnections: new Map()
   },
+  overlays: {
+    activeId: "A",
+    deliveryTarget: "all",
+    shutdownWhenHidden: false,
+    instances: {
+      A: {
+        id: "A",
+        hidden: false,
+        loaded: true
+      },
+      B: null
+    }
+  },
+  loadedWidgetDocument: null,
   chat: {
     lastPayload: null,
     history: [],
@@ -151,6 +186,7 @@ async function init() {
     ]);
     renderPredictionControls();
     renderWorkerControls();
+    renderOverlayStatus();
     renderChatHistory();
     renderChatPayload();
     applyDebugMode();
@@ -206,30 +242,70 @@ function bindElements() {
   elements.eventPayload = document.querySelector("#eventPayload");
   elements.payloadError = document.querySelector("#payloadError");
   elements.payloadTypeLabel = document.querySelector("#payloadTypeLabel");
+  elements.predictionTwitchValidMode = document.querySelector("#predictionTwitchValidMode");
+  elements.predictionStressMode = document.querySelector("#predictionStressMode");
   elements.predictionTitle = document.querySelector("#predictionTitle");
   elements.predictionDuration = document.querySelector("#predictionDuration");
   elements.predictionOutcomeCount = document.querySelector("#predictionOutcomeCount");
+  elements.predictionCountButtons = Array.from(document.querySelectorAll("[data-prediction-count]"));
+  elements.predictionValidation = document.querySelector("#predictionValidation");
   elements.predictionWinningOutcome = document.querySelector("#predictionWinningOutcome");
   elements.predictionOutcomes = document.querySelector("#predictionOutcomes");
+  elements.predictionVotePattern = document.querySelector("#predictionVotePattern");
+  elements.predictionApplyVotePatternButton = document.querySelector("#predictionApplyVotePatternButton");
   elements.predictionCreateButton = document.querySelector("#predictionCreateButton");
+  elements.predictionBeginNormalButton = document.querySelector("#predictionBeginNormalButton");
+  elements.predictionBeginTenButton = document.querySelector("#predictionBeginTenButton");
+  elements.predictionBeginOneSecondButton = document.querySelector("#predictionBeginOneSecondButton");
+  elements.predictionActiveExpiredButton = document.querySelector("#predictionActiveExpiredButton");
+  elements.predictionProgressExpiredButton = document.querySelector("#predictionProgressExpiredButton");
   elements.predictionVoteOneButton = document.querySelector("#predictionVoteOneButton");
   elements.predictionVoteTwoButton = document.querySelector("#predictionVoteTwoButton");
   elements.predictionVoteRandomButton = document.querySelector("#predictionVoteRandomButton");
   elements.predictionLockButton = document.querySelector("#predictionLockButton");
+  elements.predictionLockNoEndButton = document.querySelector("#predictionLockNoEndButton");
+  elements.predictionLockWaitFadeButton = document.querySelector("#predictionLockWaitFadeButton");
+  elements.predictionEndLateLockButton = document.querySelector("#predictionEndLateLockButton");
+  elements.predictionEndNoLockButton = document.querySelector("#predictionEndNoLockButton");
   elements.predictionEndOneButton = document.querySelector("#predictionEndOneButton");
   elements.predictionEndTwoButton = document.querySelector("#predictionEndTwoButton");
+  elements.predictionResolveWinnerButton = document.querySelector("#predictionResolveWinnerButton");
   elements.predictionCancelButton = document.querySelector("#predictionCancelButton");
+  elements.predictionEndCanceledButton = document.querySelector("#predictionEndCanceledButton");
   elements.predictionResetButton = document.querySelector("#predictionResetButton");
+  elements.predictionResetLabStateButton = document.querySelector("#predictionResetLabStateButton");
+  elements.predictionStateSummary = document.querySelector("#predictionStateSummary");
   elements.workerInterceptToggle = document.querySelector("#workerInterceptToggle");
   elements.workerUrlInput = document.querySelector("#workerUrlInput");
+  elements.workerReplayMode = document.querySelector("#workerReplayMode");
   elements.workerWelcomeButton = document.querySelector("#workerWelcomeButton");
   elements.workerErrorButton = document.querySelector("#workerErrorButton");
   elements.workerBeginButton = document.querySelector("#workerBeginButton");
   elements.workerProgressButton = document.querySelector("#workerProgressButton");
   elements.workerLockButton = document.querySelector("#workerLockButton");
   elements.workerEndButton = document.querySelector("#workerEndButton");
+  elements.workerReplayLastButton = document.querySelector("#workerReplayLastButton");
+  elements.workerReplayCurrentButton = document.querySelector("#workerReplayCurrentButton");
+  elements.workerReplayHistoryButton = document.querySelector("#workerReplayHistoryButton");
   elements.workerConnectionCount = document.querySelector("#workerConnectionCount");
   elements.workerConnectionList = document.querySelector("#workerConnectionList");
+  elements.overlayActiveSelect = document.querySelector("#overlayActiveSelect");
+  elements.overlayDeliveryTarget = document.querySelector("#overlayDeliveryTarget");
+  elements.overlayShutdownWhenHidden = document.querySelector("#overlayShutdownWhenHidden");
+  elements.overlayHideButton = document.querySelector("#overlayHideButton");
+  elements.overlayShowButton = document.querySelector("#overlayShowButton");
+  elements.overlayRefreshButton = document.querySelector("#overlayRefreshButton");
+  elements.overlayDeactivateButton = document.querySelector("#overlayDeactivateButton");
+  elements.overlayActivateButton = document.querySelector("#overlayActivateButton");
+  elements.overlayDuplicateButton = document.querySelector("#overlayDuplicateButton");
+  elements.overlaySendActiveButton = document.querySelector("#overlaySendActiveButton");
+  elements.overlayBroadcastButton = document.querySelector("#overlayBroadcastButton");
+  elements.overlaySendAButton = document.querySelector("#overlaySendAButton");
+  elements.overlaySendBButton = document.querySelector("#overlaySendBButton");
+  elements.overlayReloadBLockedButton = document.querySelector("#overlayReloadBLockedButton");
+  elements.overlayEndHiddenButton = document.querySelector("#overlayEndHiddenButton");
+  elements.overlayReconnectExpiredButton = document.querySelector("#overlayReconnectExpiredButton");
+  elements.overlayStatus = document.querySelector("#overlayStatus");
   elements.fieldsList = document.querySelector("#fieldsList");
   elements.previewShell = document.querySelector("#previewShell");
   elements.iframeViewport = document.querySelector("#iframeViewport");
@@ -310,12 +386,17 @@ function bindEvents() {
     validatePayloadEditor();
   });
 
+  elements.predictionTwitchValidMode.addEventListener("change", () => setPredictionMode("twitch"));
+  elements.predictionStressMode.addEventListener("change", () => setPredictionMode("stress"));
+
   elements.predictionTitle.addEventListener("input", () => {
     state.prediction.title = elements.predictionTitle.value;
+    renderPredictionValidation();
   });
 
   elements.predictionDuration.addEventListener("input", () => {
     state.prediction.durationSeconds = clampInteger(elements.predictionDuration.value, 1, 86400);
+    renderPredictionValidation();
   });
 
   elements.predictionOutcomeCount.addEventListener("change", () => {
@@ -327,15 +408,31 @@ function bindEvents() {
   });
 
   elements.predictionOutcomes.addEventListener("input", handlePredictionOutcomeInput);
+  for (const button of elements.predictionCountButtons) {
+    button.addEventListener("click", () => setPredictionOutcomeCount(button.dataset.predictionCount));
+  }
+  elements.predictionApplyVotePatternButton.addEventListener("click", applySelectedVotePattern);
   elements.predictionCreateButton.addEventListener("click", createPrediction);
+  elements.predictionBeginNormalButton.addEventListener("click", beginNormalPrediction);
+  elements.predictionBeginTenButton.addEventListener("click", beginTenOutcomePrediction);
+  elements.predictionBeginOneSecondButton.addEventListener("click", beginOneSecondStressPrediction);
+  elements.predictionActiveExpiredButton.addEventListener("click", forceActiveExpiredPrediction);
+  elements.predictionProgressExpiredButton.addEventListener("click", progressExpiredPrediction);
   elements.predictionVoteOneButton.addEventListener("click", () => addVotesToOutcome(0));
   elements.predictionVoteTwoButton.addEventListener("click", () => addVotesToOutcome(1));
   elements.predictionVoteRandomButton.addEventListener("click", addRandomPredictionVotes);
   elements.predictionLockButton.addEventListener("click", lockPrediction);
+  elements.predictionLockNoEndButton.addEventListener("click", lockPredictionWithoutEnd);
+  elements.predictionLockWaitFadeButton.addEventListener("click", lockPredictionAndWaitFade);
+  elements.predictionEndLateLockButton.addEventListener("click", endAfterLateLock);
+  elements.predictionEndNoLockButton.addEventListener("click", endWithoutPriorLock);
   elements.predictionEndOneButton.addEventListener("click", () => endPrediction(0));
   elements.predictionEndTwoButton.addEventListener("click", () => endPrediction(1));
+  elements.predictionResolveWinnerButton.addEventListener("click", resolvePredictionWithSelectedWinner);
   elements.predictionCancelButton.addEventListener("click", cancelPrediction);
+  elements.predictionEndCanceledButton.addEventListener("click", cancelPrediction);
   elements.predictionResetButton.addEventListener("click", resetPrediction);
+  elements.predictionResetLabStateButton.addEventListener("click", resetPredictionLabState);
 
   elements.workerInterceptToggle.addEventListener("change", () => {
     state.worker.interceptWebSocket = elements.workerInterceptToggle.checked;
@@ -347,25 +444,67 @@ function bindEvents() {
     sendWorkerConfig();
   });
 
+  elements.workerReplayMode.addEventListener("change", () => {
+    state.worker.replayMode = elements.workerReplayMode.value;
+    sendWorkerConfig();
+  });
+
   elements.workerWelcomeButton.addEventListener("click", sendWorkerWelcome);
   elements.workerErrorButton.addEventListener("click", sendWorkerBridgeError);
   elements.workerBeginButton.addEventListener("click", () => sendWorkerPrediction("begin"));
   elements.workerProgressButton.addEventListener("click", () => sendWorkerPrediction("progress"));
   elements.workerLockButton.addEventListener("click", () => sendWorkerPrediction("lock"));
   elements.workerEndButton.addEventListener("click", () => sendWorkerPrediction("end"));
+  elements.workerReplayLastButton.addEventListener("click", replayWorkerLastPayload);
+  elements.workerReplayCurrentButton.addEventListener("click", replayWorkerCurrentPrediction);
+  elements.workerReplayHistoryButton.addEventListener("click", replayWorkerHistory);
+
+  elements.overlayActiveSelect.addEventListener("change", () => setActiveOverlay(elements.overlayActiveSelect.value));
+  elements.overlayDeliveryTarget.addEventListener("change", () => {
+    state.overlays.deliveryTarget = elements.overlayDeliveryTarget.value;
+    renderOverlayStatus();
+  });
+  elements.overlayShutdownWhenHidden.addEventListener("change", () => {
+    state.overlays.shutdownWhenHidden = elements.overlayShutdownWhenHidden.checked;
+    renderOverlayStatus();
+  });
+  elements.overlayHideButton.addEventListener("click", () => hideOverlay(state.overlays.activeId));
+  elements.overlayShowButton.addEventListener("click", () => showOverlay(state.overlays.activeId));
+  elements.overlayRefreshButton.addEventListener("click", () => refreshOverlay(state.overlays.activeId));
+  elements.overlayDeactivateButton.addEventListener("click", deactivateScene);
+  elements.overlayActivateButton.addEventListener("click", activateScene);
+  elements.overlayDuplicateButton.addEventListener("click", duplicateOverlayInstance);
+  elements.overlaySendActiveButton.addEventListener("click", () => setOverlayDeliveryTarget("active"));
+  elements.overlayBroadcastButton.addEventListener("click", () => setOverlayDeliveryTarget("all"));
+  elements.overlaySendAButton.addEventListener("click", () => setOverlayDeliveryTarget("A"));
+  elements.overlaySendBButton.addEventListener("click", () => setOverlayDeliveryTarget("B"));
+  elements.overlayReloadBLockedButton.addEventListener("click", runReloadOverlayBWhileLockedScenario);
+  elements.overlayEndHiddenButton.addEventListener("click", runEndWhileHiddenScenario);
+  elements.overlayReconnectExpiredButton.addEventListener("click", runReconnectWhileActiveExpiredScenario);
 
   elements.clearLogsButton.addEventListener("click", clearLogs);
-  elements.frame.addEventListener("load", () => {
+  attachOverlayFrameLoadHandler(elements.frame, "A");
+
+  window.addEventListener("message", handleWidgetMessage);
+}
+
+function attachOverlayFrameLoadHandler(frame, overlayId) {
+  if (!frame || frame.dataset.overlayLoadHandler === "true") {
+    return;
+  }
+
+  frame.dataset.overlayLoadHandler = "true";
+  frame.addEventListener("load", () => {
     state.frameReady = true;
 
     if (state.selectedWidget) {
-      writeLog("info", "lab", `Iframe cargado: ${state.selectedWidget.id}`);
-      sendWorkerConfig();
+      writeLog("info", "lab", `Iframe cargado: ${state.selectedWidget.id}`, {
+        overlayId
+      });
+      sendWorkerConfig(overlayId);
       flushPendingChatMessages();
     }
   });
-
-  window.addEventListener("message", handleWidgetMessage);
 }
 
 function setupCollapsibleSections() {
@@ -726,12 +865,7 @@ async function previewImportedWidget() {
     state.selectedManifestUrl = null;
     state.fieldsSchema = draft.fieldsSchema;
     state.fieldData = fieldData;
-
-    renderWidgetMeta(draft.manifest);
-    showImportPreviewOption(draft.manifest);
-    renderFields(draft.fieldsSchema, fieldData);
-    resetPayloadDrafts();
-    renderIframe({
+    state.loadedWidgetDocument = {
       manifest: draft.manifest,
       html: draft.html,
       css: draft.css,
@@ -739,7 +873,14 @@ async function previewImportedWidget() {
       fieldsSchema: draft.fieldsSchema,
       fieldData,
       harnessScripts
-    });
+    };
+    resetOverlayInstancesForWidgetLoad();
+
+    renderWidgetMeta(draft.manifest);
+    showImportPreviewOption(draft.manifest);
+    renderFields(draft.fieldsSchema, fieldData);
+    resetPayloadDrafts();
+    renderIframe({ ...state.loadedWidgetDocument, frame: elements.frame, overlayId: "A" });
     applyPreviewDimensions(draft.manifest.width, draft.manifest.height, state.responsive.zoom);
 
     setStatus(`Import preview: ${draft.manifest.name}`);
@@ -1001,11 +1142,13 @@ async function loadWidget(widgetId) {
 
     state.fieldsSchema = fieldsSchema;
     state.fieldData = extractFieldData(fieldsSchema);
+    state.loadedWidgetDocument = { manifest: widget, html, css, script, fieldsSchema, fieldData: state.fieldData, harnessScripts };
+    resetOverlayInstancesForWidgetLoad();
 
     renderWidgetMeta(widget);
     renderFields(fieldsSchema, state.fieldData);
     resetPayloadDrafts();
-    renderIframe({ manifest: widget, html, css, script, fieldsSchema, fieldData: state.fieldData, harnessScripts });
+    renderIframe({ ...state.loadedWidgetDocument, frame: elements.frame, overlayId: "A" });
 
     setStatus(`Cargado: ${widget.name || widget.id}`);
     writeLog("info", "lab", `Widget cargado: ${widget.id}`, {
@@ -1233,12 +1376,17 @@ function applyResponsiveMode() {
 }
 
 function applyPreviewDimensions(width, height, zoom) {
-  elements.iframeViewport.style.width = `${width * zoom}px`;
-  elements.iframeViewport.style.height = `${height * zoom}px`;
-  elements.frame.style.width = `${width}px`;
-  elements.frame.style.height = `${height}px`;
-  elements.frame.style.transform = `scale(${zoom})`;
-  elements.frame.style.transformOrigin = "top left";
+  for (const viewport of document.querySelectorAll(".iframe-viewport")) {
+    viewport.style.width = `${width * zoom}px`;
+    viewport.style.height = `${height * zoom}px`;
+  }
+
+  for (const frame of document.querySelectorAll("iframe[data-overlay-id]")) {
+    frame.style.width = `${width}px`;
+    frame.style.height = `${height}px`;
+    frame.style.transform = `scale(${zoom})`;
+    frame.style.transformOrigin = "top left";
+  }
 }
 
 function applyPreviewBackground() {
@@ -1246,17 +1394,330 @@ function applyPreviewBackground() {
   elements.previewShell.classList.add(`preview-bg-${state.responsive.background}`);
 }
 
+function resetOverlayInstancesForWidgetLoad() {
+  const overlayB = getOverlayViewport("B");
+
+  if (overlayB) {
+    overlayB.remove();
+  }
+
+  clearOverlayConnections("A", "widget reload");
+  clearOverlayConnections("B", "widget reload");
+  state.overlays.activeId = "A";
+  state.overlays.instances = {
+    A: {
+      id: "A",
+      hidden: false,
+      loaded: true
+    },
+    B: null
+  };
+  elements.iframeViewport.classList.remove("is-overlay-hidden", "is-active-overlay");
+  elements.iframeViewport.dataset.overlayId = "A";
+  elements.frame.dataset.overlayId = "A";
+  elements.frame.title = "Widget preview Overlay A";
+  elements.frame.hidden = false;
+  elements.iframeViewport.classList.add("is-active-overlay");
+  renderOverlayStatus();
+}
+
+function getOverlayFrame(overlayId) {
+  return document.querySelector(`iframe[data-overlay-id="${overlayId}"]`);
+}
+
+function getOverlayViewport(overlayId) {
+  return document.querySelector(`.iframe-viewport[data-overlay-id="${overlayId}"]`);
+}
+
+function setActiveOverlay(overlayId) {
+  if (overlayId === "B" && !state.overlays.instances.B) {
+    duplicateOverlayInstance();
+  }
+
+  state.overlays.activeId = overlayId === "B" ? "B" : "A";
+  document.querySelectorAll(".iframe-viewport").forEach((viewport) => {
+    viewport.classList.toggle("is-active-overlay", viewport.dataset.overlayId === state.overlays.activeId);
+  });
+  elements.overlayActiveSelect.value = state.overlays.activeId;
+  renderOverlayStatus();
+  writeLog("info", "lab", `Overlay activo: ${state.overlays.activeId}`, {
+    activeOverlay: state.overlays.activeId
+  });
+}
+
+function setOverlayDeliveryTarget(target) {
+  state.overlays.deliveryTarget = target;
+  elements.overlayDeliveryTarget.value = target;
+  renderOverlayStatus();
+
+  if (state.prediction.lastPredictionPayload) {
+    postWorkerBroadcast("WORKER_MOCK_BROADCAST", state.prediction.lastPredictionPayload, `Overlay target ${target} last payload`, {
+      target,
+      recordPrediction: false
+    });
+  } else {
+    writeLog("warn", "lab", `Destino Worker cambiado a ${target}, pero no hay payload de prediccion para enviar`, {
+      overlayTarget: target
+    });
+  }
+}
+
+function renderOverlayStatus() {
+  const overlays = ["A", "B"].map((id) => {
+    const instance = state.overlays.instances[id];
+    const connectionCount = countOpenMockConnections(id);
+
+    if (!instance) {
+      return `${id}: no creado`;
+    }
+
+    return `${id}: ${instance.hidden ? "hidden" : "visible"}, WS ${connectionCount}`;
+  });
+
+  elements.overlayActiveSelect.value = state.overlays.activeId;
+  elements.overlayDeliveryTarget.value = state.overlays.deliveryTarget;
+  elements.overlayShutdownWhenHidden.checked = state.overlays.shutdownWhenHidden;
+  elements.overlayStatus.textContent = `Activo ${state.overlays.activeId} | destino ${state.overlays.deliveryTarget} | ${overlays.join(" | ")}`;
+}
+
+function duplicateOverlayInstance() {
+  const frame = ensureOverlayFrame("B", { recreate: true });
+
+  if (!frame || !state.loadedWidgetDocument) {
+    writeLog("warn", "lab", "No se pudo crear Overlay B: no hay widget cargado");
+    return null;
+  }
+
+  state.overlays.instances.B = {
+    id: "B",
+    hidden: false,
+    loaded: true
+  };
+  renderOverlayFromCache("B");
+  setActiveOverlay("B");
+  writeLog("info", "lab", "Overlay B creado como segunda instancia del widget", {
+    selectedWidget: state.selectedWidget?.id || null,
+    activeConnections: state.worker.openConnections.size
+  });
+  return frame;
+}
+
+function ensureOverlayFrame(overlayId, options = {}) {
+  let viewport = getOverlayViewport(overlayId);
+  let frame = getOverlayFrame(overlayId);
+
+  if (!viewport) {
+    viewport = document.createElement("div");
+    viewport.className = "iframe-viewport overlay-viewport";
+    viewport.dataset.overlayId = overlayId;
+    elements.previewShell.append(viewport);
+  }
+
+  if (!frame || options.recreate) {
+    frame?.remove();
+    frame = document.createElement("iframe");
+    if (overlayId === "A") {
+      frame.id = "widgetFrame";
+    }
+    frame.title = `Widget preview Overlay ${overlayId}`;
+    frame.setAttribute("sandbox", "allow-scripts");
+    frame.dataset.overlayId = overlayId;
+    viewport.append(frame);
+    attachOverlayFrameLoadHandler(frame, overlayId);
+
+    if (overlayId === "A") {
+      elements.frame = frame;
+    }
+  }
+
+  applyResponsiveMode();
+  return frame;
+}
+
+function renderOverlayFromCache(overlayId) {
+  const frame = ensureOverlayFrame(overlayId);
+
+  if (!frame || !state.loadedWidgetDocument) {
+    return;
+  }
+
+  clearOverlayConnections(overlayId, "overlay render");
+  renderIframe({ ...state.loadedWidgetDocument, frame, overlayId });
+}
+
+function refreshOverlay(overlayId) {
+  const frame = ensureOverlayFrame(overlayId, { recreate: true });
+
+  if (!frame || !state.loadedWidgetDocument) {
+    writeLog("warn", "lab", `No se pudo refrescar Overlay ${overlayId}: no hay widget cargado`);
+    return;
+  }
+
+  clearOverlayConnections(overlayId, "overlay refresh");
+  renderIframe({ ...state.loadedWidgetDocument, frame, overlayId });
+  showOverlay(overlayId, { silent: true });
+  writeLog("info", "lab", `Overlay ${overlayId} destruido y recreado`, {
+    action: "Refresh source",
+    currentPredictionStatus: state.prediction.currentPredictionStatus
+  });
+}
+
+function hideOverlay(overlayId, options = {}) {
+  const viewport = getOverlayViewport(overlayId);
+
+  if (!viewport) {
+    writeLog("warn", "lab", `Overlay ${overlayId} no existe`);
+    return;
+  }
+
+  viewport.classList.add("is-overlay-hidden");
+  state.overlays.instances[overlayId].hidden = true;
+  renderOverlayStatus();
+
+  if (!options.silent) {
+    writeLog("info", "lab", `Overlay ${overlayId} ocultado visualmente`, {
+      action: "Hide source",
+      sendsEvents: false
+    });
+  }
+}
+
+function showOverlay(overlayId, options = {}) {
+  const viewport = getOverlayViewport(overlayId);
+
+  if (!viewport) {
+    writeLog("warn", "lab", `Overlay ${overlayId} no existe`);
+    return;
+  }
+
+  viewport.classList.remove("is-overlay-hidden");
+  state.overlays.instances[overlayId].hidden = false;
+  sendWorkerConfig(overlayId);
+  renderOverlayStatus();
+
+  if (!options.silent) {
+    writeLog("info", "lab", `Overlay ${overlayId} mostrado`, {
+      action: "Show source",
+      activeConnections: countOpenMockConnections(overlayId)
+    });
+  }
+}
+
+function deactivateScene() {
+  const overlayId = state.overlays.activeId;
+  hideOverlay(overlayId);
+
+  if (state.overlays.shutdownWhenHidden) {
+    closeOverlayWebSockets(overlayId, "scene deactivated");
+  }
+
+  writeLog("info", "lab", `Scene deactivated para Overlay ${overlayId}`, {
+    shutdownWhenHidden: state.overlays.shutdownWhenHidden
+  });
+}
+
+function activateScene() {
+  const overlayId = state.overlays.activeId;
+  showOverlay(overlayId);
+  writeLog("info", "lab", `Scene activated para Overlay ${overlayId}`, {
+    activeConnections: countOpenMockConnections(overlayId)
+  });
+}
+
+function closeOverlayWebSockets(overlayId, reason) {
+  postToWidgetFrames({
+    source: LAB_SOURCE,
+    type: "WORKER_MOCK_CLOSE",
+    reason
+  }, { target: overlayId });
+  writeLog("info", "lab", `Cierre de WebSocket mock solicitado para Overlay ${overlayId}`, {
+    reason,
+    openBeforeClose: countOpenMockConnections(overlayId)
+  });
+}
+
+function clearOverlayConnections(overlayId, reason) {
+  for (const [connectionId, connection] of state.worker.openConnections.entries()) {
+    if (connection.overlayId === overlayId) {
+      state.worker.openConnections.delete(connectionId);
+      writeLog("info", "lab", `Conexion mock descartada por ${reason}`, {
+        connectionId,
+        overlayId
+      });
+    }
+  }
+
+  updateWorkerConnectionCount();
+}
+
+function runReloadOverlayBWhileLockedScenario() {
+  const previousTarget = state.overlays.deliveryTarget;
+  state.overlays.deliveryTarget = "A";
+  beginNormalPrediction();
+  lockPredictionWithoutEnd();
+  writeLog("info", "lab", "Escenario: Overlay B se recargara tras 16s mientras A esta locked", {
+    step: "A begin + A lock"
+  });
+  window.setTimeout(() => {
+    duplicateOverlayInstance();
+    refreshOverlay("B");
+    state.overlays.deliveryTarget = previousTarget;
+    elements.overlayDeliveryTarget.value = previousTarget;
+    renderOverlayStatus();
+    writeLog("info", "lab", "Escenario: Overlay B recreado; no se ha enviado end todavia", {
+      currentPredictionStatus: state.prediction.currentPredictionStatus,
+      replayMode: state.worker.replayMode
+    });
+  }, 16000);
+}
+
+function runEndWhileHiddenScenario() {
+  beginNormalPrediction();
+  lockPredictionWithoutEnd();
+  hideOverlay(state.overlays.activeId);
+  endPredictionByOutcomeId(state.prediction.winningOutcomeId || state.prediction.outcomes[0]?.id || null, "resolved");
+  writeLog("info", "lab", "Escenario End while hidden ejecutado", {
+    activeOverlay: state.overlays.activeId,
+    currentPredictionStatus: state.prediction.currentPredictionStatus
+  });
+}
+
+function runReconnectWhileActiveExpiredScenario() {
+  if (state.prediction.mode !== "stress") {
+    setPredictionMode("stress");
+  }
+
+  beginOneSecondStressPrediction();
+  forceActiveExpiredPrediction();
+  closeOverlayWebSockets(state.overlays.activeId, "reconnect while active expired");
+  window.setTimeout(() => {
+    refreshOverlay(state.overlays.activeId);
+    writeLog("info", "lab", "Escenario Reconnect while active expired: overlay recreado", {
+      activeOverlay: state.overlays.activeId,
+      replayMode: state.worker.replayMode,
+      currentPredictionStatus: state.prediction.currentPredictionStatus
+    });
+  }, 500);
+}
+
 function createDefaultPredictionState() {
   return {
     id: "prediction-0001",
     title: "Quien gana la siguiente ronda?",
     durationSeconds: 60,
+    mode: "twitch",
     status: "idle",
+    currentPredictionStatus: "idle",
+    currentPredictionStage: "idle",
     startedAt: null,
     locksAt: null,
     lockedAt: null,
     endedAt: null,
     winningOutcomeId: "outcome-1",
+    currentPrediction: null,
+    predictionHistory: [],
+    lastPredictionPayload: null,
+    lockFadeTimer: null,
     outcomes: [
       createPredictionOutcome(1),
       createPredictionOutcome(2)
@@ -1268,18 +1729,22 @@ function createPredictionOutcome(number) {
   return {
     id: `outcome-${number}`,
     title: `Opcion ${number}`,
-    color: number % 2 === 0 ? "pink" : "blue",
+    color: "blue",
     users: 0,
     channelPoints: 0
   };
 }
 
 function renderPredictionControls() {
+  elements.predictionTwitchValidMode.checked = state.prediction.mode === "twitch";
+  elements.predictionStressMode.checked = state.prediction.mode === "stress";
   elements.predictionTitle.value = state.prediction.title;
   elements.predictionDuration.value = String(state.prediction.durationSeconds);
   elements.predictionOutcomeCount.value = String(state.prediction.outcomes.length);
   renderPredictionWinningOptions();
   renderPredictionOutcomeRows();
+  renderPredictionValidation();
+  renderPredictionStateSummary();
 }
 
 function renderPredictionWinningOptions() {
@@ -1341,6 +1806,78 @@ function createPredictionInput(index, field, label, value, type) {
   return wrapper;
 }
 
+function setPredictionMode(mode) {
+  state.prediction.mode = mode === "stress" ? "stress" : "twitch";
+
+  if (state.prediction.mode === "twitch") {
+    applyTwitchPredictionLimits();
+  }
+
+  renderPredictionControls();
+  writeLog("info", "lab", `Prediction mode: ${state.prediction.mode}`, {
+    limits: PREDICTION_LIMITS
+  });
+}
+
+function applyTwitchPredictionLimits() {
+  state.prediction.title = state.prediction.title.slice(0, PREDICTION_LIMITS.titleMax);
+  state.prediction.durationSeconds = clampInteger(
+    state.prediction.durationSeconds,
+    PREDICTION_LIMITS.durationMin,
+    PREDICTION_LIMITS.durationMax
+  );
+  resizePredictionOutcomes(clampInteger(
+    state.prediction.outcomes.length,
+    PREDICTION_LIMITS.outcomesMin,
+    PREDICTION_LIMITS.outcomesMax
+  ));
+
+  for (const outcome of state.prediction.outcomes) {
+    outcome.title = String(outcome.title || "").slice(0, PREDICTION_LIMITS.outcomeTitleMax);
+  }
+}
+
+function renderPredictionValidation() {
+  const warnings = [];
+  const title = elements.predictionTitle.value || "";
+  const duration = Number.parseInt(elements.predictionDuration.value, 10);
+
+  if (title.length > PREDICTION_LIMITS.titleMax) {
+    warnings.push(`titulo ${title.length}/${PREDICTION_LIMITS.titleMax}`);
+  }
+
+  if (state.prediction.mode === "twitch" && (!Number.isFinite(duration) || duration < PREDICTION_LIMITS.durationMin || duration > PREDICTION_LIMITS.durationMax)) {
+    warnings.push(`duracion fuera de ${PREDICTION_LIMITS.durationMin}-${PREDICTION_LIMITS.durationMax}s`);
+  }
+
+  state.prediction.outcomes.forEach((outcome, index) => {
+    const value = String(outcome.title || "");
+
+    if (value.length > PREDICTION_LIMITS.outcomeTitleMax) {
+      warnings.push(`opcion ${index + 1} ${value.length}/${PREDICTION_LIMITS.outcomeTitleMax}`);
+    }
+  });
+
+  if (warnings.length === 0) {
+    elements.predictionValidation.textContent = state.prediction.mode === "twitch"
+      ? "Twitch valid mode: 2-10 opciones, titulo <=45, outcome <=25, duracion 30-1800s."
+      : "Stress mode: permite duraciones cortas, locks_at en pasado y eventos fuera de orden.";
+    elements.predictionValidation.className = "validation-summary is-ok";
+    return;
+  }
+
+  elements.predictionValidation.textContent = `Warnings: ${warnings.join("; ")}`;
+  elements.predictionValidation.className = "validation-summary has-warnings";
+}
+
+function renderPredictionStateSummary() {
+  const status = state.prediction.currentPredictionStatus || state.prediction.status || "idle";
+  const historyCount = state.prediction.predictionHistory.length;
+  const openConnections = state.worker.openConnections.size;
+
+  elements.predictionStateSummary.textContent = `Estado: ${status} | stage: ${state.prediction.currentPredictionStage || "idle"} | history: ${historyCount} | WS: ${openConnections}`;
+}
+
 function handlePredictionOutcomeInput(event) {
   const input = event.target;
   const index = Number(input.dataset.outcomeIndex);
@@ -1353,16 +1890,18 @@ function handlePredictionOutcomeInput(event) {
   if (field === "title") {
     state.prediction.outcomes[index].title = input.value;
     renderPredictionWinningOptions();
+    renderPredictionValidation();
     return;
   }
 
   state.prediction.outcomes[index][field] = clampInteger(input.value, 0, 999999999);
+  renderPredictionStateSummary();
 }
 
 function setPredictionOutcomeCount(value) {
   syncPredictionFromControls();
 
-  const nextCount = clampInteger(value, 2, 10);
+  const nextCount = clampInteger(value, PREDICTION_LIMITS.outcomesMin, PREDICTION_LIMITS.outcomesMax);
   elements.predictionOutcomeCount.value = String(nextCount);
   resizePredictionOutcomes(nextCount);
   renderPredictionControls();
@@ -1388,7 +1927,11 @@ function syncPredictionFromControls() {
     }
   }
 
-  resizePredictionOutcomes(clampInteger(elements.predictionOutcomeCount.value, 2, 10));
+  resizePredictionOutcomes(clampInteger(elements.predictionOutcomeCount.value, PREDICTION_LIMITS.outcomesMin, PREDICTION_LIMITS.outcomesMax));
+
+  if (state.prediction.mode === "twitch") {
+    applyTwitchPredictionLimits();
+  }
 }
 
 function resizePredictionOutcomes(nextCount) {
@@ -1404,18 +1947,82 @@ function resizePredictionOutcomes(nextCount) {
 }
 
 function createPrediction() {
+  beginNormalPrediction();
+}
+
+function beginNormalPrediction() {
   syncPredictionFromControls();
   startPredictionWindow();
-  state.prediction.status = "active";
+  setPredictionRuntimeStatus("active", "begin");
   state.prediction.lockedAt = null;
   state.prediction.endedAt = null;
   emitTwitchPredictionPayload(buildPredictionPayload("begin"));
+}
+
+function beginTenOutcomePrediction() {
+  syncPredictionFromControls();
+  resizePredictionOutcomes(PREDICTION_LIMITS.outcomesMax);
+  state.prediction.outcomes.forEach((outcome, index) => {
+    outcome.title = outcome.title || `Opcion ${index + 1}`;
+    outcome.users = 0;
+    outcome.channelPoints = 0;
+  });
+  renderPredictionControls();
+  beginNormalPrediction();
+}
+
+function beginOneSecondStressPrediction() {
+  if (!ensureStressMode("Begin 1s stress")) {
+    return;
+  }
+
+  syncPredictionFromControls();
+  const startedAt = new Date();
+  state.prediction.durationSeconds = 1;
+  state.prediction.startedAt = startedAt.toISOString();
+  state.prediction.locksAt = new Date(startedAt.getTime() + 1000).toISOString();
+  state.prediction.lockedAt = null;
+  state.prediction.endedAt = null;
+  setPredictionRuntimeStatus("active", "begin");
+  renderPredictionControls();
+  emitTwitchPredictionPayload(buildPredictionPayload("begin"));
+}
+
+function forceActiveExpiredPrediction() {
+  if (!ensureStressMode("Active expired")) {
+    return;
+  }
+
+  syncPredictionFromControls();
+  const startedAt = new Date(Date.now() - 60000);
+  state.prediction.startedAt = startedAt.toISOString();
+  state.prediction.locksAt = new Date(Date.now() - 1000).toISOString();
+  state.prediction.lockedAt = null;
+  state.prediction.endedAt = null;
+  setPredictionRuntimeStatus("active_expired", "begin");
+  renderPredictionControls();
+  emitTwitchPredictionPayload(buildPredictionPayload("begin"));
+}
+
+function progressExpiredPrediction() {
+  if (!ensureStressMode("Progress despues de expirada")) {
+    return;
+  }
+
+  syncPredictionFromControls();
+  ensurePredictionStarted();
+  state.prediction.locksAt = new Date(Date.now() - 1000).toISOString();
+  setPredictionRuntimeStatus("active_expired", "progress");
+  applyVotePattern("random");
+  renderPredictionControls();
+  emitTwitchPredictionPayload(buildPredictionPayload("progress"));
 }
 
 function addVotesToOutcome(index) {
   syncPredictionFromControls();
   ensurePredictionStarted();
   addPredictionVote(index, 1, 500);
+  setPredictionRuntimeStatus(getPredictionExpiredStatus(), "progress");
   renderPredictionControls();
   emitTwitchPredictionPayload(buildPredictionPayload("progress"));
 }
@@ -1430,6 +2037,7 @@ function addRandomPredictionVotes() {
     addPredictionVote(index, users, points);
   }
 
+  setPredictionRuntimeStatus(getPredictionExpiredStatus(), "progress");
   renderPredictionControls();
   emitTwitchPredictionPayload(buildPredictionPayload("progress"));
 }
@@ -1449,9 +2057,53 @@ function addPredictionVote(index, users, points) {
 function lockPrediction() {
   syncPredictionFromControls();
   ensurePredictionStarted();
-  state.prediction.status = "locked";
+  setPredictionRuntimeStatus("locked", "lock");
   state.prediction.lockedAt = new Date().toISOString();
   emitTwitchPredictionPayload(buildPredictionPayload("lock"));
+}
+
+function lockPredictionWithoutEnd() {
+  syncPredictionFromControls();
+  ensurePredictionStarted();
+  setPredictionRuntimeStatus("locked_waiting_resolution", "lock");
+  state.prediction.lockedAt = new Date().toISOString();
+  renderPredictionControls();
+  emitTwitchPredictionPayload(buildPredictionPayload("lock"));
+}
+
+function lockPredictionAndWaitFade() {
+  lockPredictionWithoutEnd();
+  writeLog("info", "lab", "Lock enviado; esperando 16 segundos para reproducir fade del widget", {
+    currentPredictionStatus: state.prediction.currentPredictionStatus,
+    activeOverlay: state.overlays.activeId
+  });
+
+  window.clearTimeout(state.prediction.lockFadeTimer);
+  state.prediction.lockFadeTimer = window.setTimeout(() => {
+    writeLog("info", "lab", "Han pasado 16 segundos desde lock; el widget puede haberse ocultado por su temporizador interno", {
+      currentPredictionStatus: state.prediction.currentPredictionStatus,
+      activeOverlay: state.overlays.activeId
+    });
+  }, 16000);
+}
+
+function endAfterLateLock() {
+  if (!["locked", "locked_waiting_resolution"].includes(state.prediction.currentPredictionStatus)) {
+    lockPredictionWithoutEnd();
+  }
+
+  setPredictionRuntimeStatus("locked_waiting_resolution", "lock");
+  writeLog("info", "lab", "End tardio solicitado despues de lock", {
+    currentPredictionStatus: state.prediction.currentPredictionStatus
+  });
+  endPredictionByOutcomeId(state.prediction.winningOutcomeId || state.prediction.outcomes[0]?.id || null, "resolved");
+}
+
+function endWithoutPriorLock() {
+  syncPredictionFromControls();
+  ensurePredictionStarted();
+  setPredictionRuntimeStatus(getPredictionExpiredStatus(), "progress");
+  endPredictionByOutcomeId(state.prediction.winningOutcomeId || state.prediction.outcomes[0]?.id || null, "resolved");
 }
 
 function endPrediction(winnerIndex) {
@@ -1465,21 +2117,33 @@ function endPrediction(winnerIndex) {
     return;
   }
 
-  state.prediction.status = "resolved";
-  state.prediction.winningOutcomeId = winner.id;
+  endPredictionByOutcomeId(winner.id, "resolved");
+}
+
+function resolvePredictionWithSelectedWinner() {
+  syncPredictionFromControls();
+  ensurePredictionStarted();
+  endPredictionByOutcomeId(state.prediction.winningOutcomeId || state.prediction.outcomes[0]?.id || null, "resolved");
+}
+
+function endPredictionByOutcomeId(winningOutcomeId, status) {
+  if (status === "resolved" && !winningOutcomeId) {
+    writeLog("warn", "lab", "No hay winning_outcome_id para resolver");
+    return;
+  }
+
+  state.prediction.status = status;
+  state.prediction.winningOutcomeId = status === "resolved" ? winningOutcomeId : null;
   state.prediction.endedAt = new Date().toISOString();
-  renderPredictionWinningOptions();
+  setPredictionRuntimeStatus(status === "canceled" ? "canceled" : "resolved", "end");
+  renderPredictionControls();
   emitTwitchPredictionPayload(buildPredictionPayload("end"));
 }
 
 function cancelPrediction() {
   syncPredictionFromControls();
   ensurePredictionStarted();
-  state.prediction.status = "canceled";
-  state.prediction.winningOutcomeId = null;
-  state.prediction.endedAt = new Date().toISOString();
-  renderPredictionWinningOptions();
-  emitTwitchPredictionPayload(buildPredictionPayload("end"));
+  endPredictionByOutcomeId(null, "canceled");
 }
 
 function resetPrediction() {
@@ -1489,12 +2153,36 @@ function resetPrediction() {
     timestamp: new Date().toISOString(),
     summary: summarizePredictionState()
   });
+  sendWorkerConfig();
+}
+
+function resetPredictionLabState() {
+  const keepMode = state.prediction.mode;
+  state.prediction.currentPrediction = null;
+  state.prediction.predictionHistory = [];
+  state.prediction.lastPredictionPayload = null;
+  state.prediction.status = "idle";
+  state.prediction.currentPredictionStatus = "idle";
+  state.prediction.currentPredictionStage = "idle";
+  state.prediction.startedAt = null;
+  state.prediction.locksAt = null;
+  state.prediction.lockedAt = null;
+  state.prediction.endedAt = null;
+  state.prediction.mode = keepMode;
+  window.clearTimeout(state.prediction.lockFadeTimer);
+  state.prediction.lockFadeTimer = null;
+  renderPredictionControls();
+  sendWorkerConfig();
+  writeLog("info", "lab", "Prediction lab state reset", {
+    currentPrediction: null,
+    predictionHistory: 0
+  });
 }
 
 function ensurePredictionStarted() {
   if (!state.prediction.startedAt || ["idle", "resolved", "canceled"].includes(state.prediction.status)) {
     startPredictionWindow();
-    state.prediction.status = "active";
+    setPredictionRuntimeStatus("active", "begin");
   }
 }
 
@@ -1504,6 +2192,101 @@ function startPredictionWindow() {
   state.prediction.locksAt = new Date(startedAt.getTime() + state.prediction.durationSeconds * 1000).toISOString();
   state.prediction.lockedAt = null;
   state.prediction.endedAt = null;
+}
+
+function setPredictionRuntimeStatus(status, stage) {
+  if (!PREDICTION_STATE_LABELS.includes(status)) {
+    status = "stale";
+  }
+
+  state.prediction.status = status === "active_expired" ? "active" : status;
+  state.prediction.currentPredictionStatus = status;
+  state.prediction.currentPredictionStage = stage || state.prediction.currentPredictionStage || "idle";
+  renderPredictionStateSummary();
+}
+
+function getPredictionExpiredStatus() {
+  if (!state.prediction.locksAt) {
+    return "active";
+  }
+
+  return new Date(state.prediction.locksAt).getTime() < Date.now()
+    ? "active_expired"
+    : "active";
+}
+
+function ensureStressMode(actionLabel) {
+  if (state.prediction.mode === "stress") {
+    return true;
+  }
+
+  writeLog("warn", "lab", `${actionLabel} requiere Stress mode`, {
+    mode: state.prediction.mode
+  });
+  return false;
+}
+
+function applySelectedVotePattern() {
+  applyVotePattern(elements.predictionVotePattern.value);
+  renderPredictionControls();
+  writeLog("info", "lab", `Vote pattern aplicado: ${elements.predictionVotePattern.value}`, {
+    summary: summarizePredictionState()
+  });
+}
+
+function applyVotePattern(pattern) {
+  syncPredictionFromControls();
+
+  if (pattern === "ten-uneven") {
+    resizePredictionOutcomes(PREDICTION_LIMITS.outcomesMax);
+  }
+
+  const outcomes = state.prediction.outcomes;
+  outcomes.forEach((outcome) => {
+    outcome.users = 0;
+    outcome.channelPoints = 0;
+  });
+
+  if (pattern === "zero") {
+    return;
+  }
+
+  if (pattern === "all-option-1") {
+    outcomes[0].users = 25;
+    outcomes[0].channelPoints = 25000;
+    return;
+  }
+
+  if (pattern === "close-percentages") {
+    outcomes.forEach((outcome, index) => {
+      outcome.users = 10 + index;
+      outcome.channelPoints = 10000 + index * 250;
+    });
+    return;
+  }
+
+  if (pattern === "tiny-huge") {
+    outcomes[0].users = 1;
+    outcomes[0].channelPoints = 100;
+    const target = outcomes[1] || outcomes[0];
+    target.users = 250;
+    target.channelPoints = 250000;
+    return;
+  }
+
+  if (pattern === "ten-uneven") {
+    outcomes.forEach((outcome, index) => {
+      outcome.users = index === 0 ? 1 : (index + 1) * 3;
+      outcome.channelPoints = [100, 9000, 23000, 500, 64000, 12000, 32000, 7000, 98000, 41000][index] || 1000;
+    });
+    return;
+  }
+
+  outcomes.forEach((outcome) => {
+    const users = Math.floor(Math.random() * 9) + 1;
+    outcome.users = users;
+    outcome.channelPoints = users * (Math.floor(Math.random() * 20) + 1) * 100;
+  });
 }
 
 function buildPredictionPayload(stage) {
@@ -1562,11 +2345,14 @@ function buildPredictionPayload(stage) {
 function buildPredictionOutcomes(includeWinnings) {
   return state.prediction.outcomes.map((outcome, index) => {
     const isWinner = state.prediction.winningOutcomeId === outcome.id;
+    const color = state.prediction.outcomes.length > 2 && state.prediction.mode !== "stress"
+      ? "blue"
+      : (outcome.color || (index % 2 === 0 ? "blue" : "pink"));
 
     return {
       id: outcome.id,
       title: outcome.title,
-      color: outcome.color || (index % 2 === 0 ? "blue" : "pink"),
+      color,
       users: outcome.users,
       channel_points: outcome.channelPoints,
       top_predictors: buildTopPredictors(outcome, index, includeWinnings && isWinner)
@@ -1595,24 +2381,29 @@ function buildTopPredictors(outcome, index, includeWinnings) {
 }
 
 function emitTwitchPredictionPayload(payload) {
-  const frameWindow = elements.frame.contentWindow;
   const timestamp = new Date().toISOString();
   const summary = summarizePredictionPayload(payload);
+  const frames = getTargetFrames("active");
 
-  if (!frameWindow) {
+  if (frames.length === 0) {
     writeLog("error", "lab", "Iframe no disponible");
     return;
   }
 
-  frameWindow.postMessage({
-    source: LAB_SOURCE,
-    type: "TWITCH_EVENTSUB_EMIT",
-    payload
-  }, "*");
+  for (const frame of frames) {
+    frame.contentWindow?.postMessage({
+      source: LAB_SOURCE,
+      type: "TWITCH_EVENTSUB_EMIT",
+      payload
+    }, "*");
+  }
+  recordPredictionPayload(payload, `Twitch Predictions ${payload.type}`);
   mirrorPredictionPayloadToWorkerForActiveWidget(payload, "Twitch Predictions");
 
   writeLog("info", "lab", `Evento emitido: ${payload.type}`, {
     timestamp,
+    channel: "twitch:eventsub",
+    overlayTarget: "active",
     summary,
     payload
   });
@@ -1633,7 +2424,9 @@ function mirrorPredictionPayloadToWorkerForActiveWidget(payload, sourceLabel) {
     },
     openMockWebSockets: state.worker.openConnections.size
   });
-  postWorkerBroadcast("WORKER_MOCK_BROADCAST", payload, `Prediccion compat ${payload.type}`);
+  postWorkerBroadcast("WORKER_MOCK_BROADCAST", payload, `Prediccion compat ${payload.type}`, {
+    recordPrediction: false
+  });
 }
 
 function summarizePredictionPayload(payload) {
@@ -1655,10 +2448,99 @@ function summarizePredictionPayload(payload) {
   };
 }
 
+function isPredictionPayload(payload) {
+  return Boolean(payload?.type && String(payload.type).startsWith("channel.prediction."));
+}
+
+function recordPredictionPayload(payload, label = "prediction") {
+  if (!isPredictionPayload(payload)) {
+    return;
+  }
+
+  const stage = String(payload.type).replace("channel.prediction.", "");
+  const event = cloneJson(payload.event || {});
+  const status = inferPredictionStatusFromPayload(payload);
+  state.prediction.lastPredictionPayload = cloneJson(payload);
+  state.prediction.currentPrediction = event;
+  state.prediction.currentPredictionStatus = status;
+  state.prediction.currentPredictionStage = stage;
+  state.prediction.predictionHistory.push({
+    timestamp: new Date().toISOString(),
+    label,
+    stage,
+    status,
+    payload: cloneJson(payload)
+  });
+
+  if (state.prediction.predictionHistory.length > 100) {
+    state.prediction.predictionHistory.shift();
+  }
+
+  renderPredictionStateSummary();
+  sendWorkerConfig();
+}
+
+function inferPredictionStatusFromPayload(payload) {
+  const stage = String(payload.type || "").replace("channel.prediction.", "");
+  const event = payload.event || {};
+
+  if (stage === "end") {
+    return event.status === "canceled" ? "canceled" : "resolved";
+  }
+
+  if (stage === "lock") {
+    return state.prediction.currentPredictionStatus === "locked_waiting_resolution"
+      ? "locked_waiting_resolution"
+      : "locked";
+  }
+
+  if ((stage === "begin" || stage === "progress") && event.locks_at && new Date(event.locks_at).getTime() < Date.now()) {
+    return "active_expired";
+  }
+
+  return "active";
+}
+
+function buildWorkerPredictionStateSnapshot() {
+  return {
+    currentPrediction: cloneJson(state.prediction.currentPrediction),
+    predictionHistory: cloneJson(state.prediction.predictionHistory.map((item) => item.payload)),
+    lastPredictionPayload: cloneJson(state.prediction.lastPredictionPayload),
+    currentPredictionStatus: state.prediction.currentPredictionStatus,
+    currentPredictionStage: state.prediction.currentPredictionStage
+  };
+}
+
+function buildCurrentPredictionSnapshotPayload() {
+  if (!state.prediction.currentPrediction) {
+    return state.prediction.lastPredictionPayload || null;
+  }
+
+  const status = state.prediction.currentPredictionStatus;
+  let stage = state.prediction.currentPredictionStage || "progress";
+
+  if (status === "resolved" || status === "canceled") {
+    stage = "end";
+  } else if (status === "locked" || status === "locked_waiting_resolution") {
+    stage = "lock";
+  } else if (stage === "idle") {
+    stage = "progress";
+  }
+
+  const type = TWITCH_PREDICTION_TYPES[stage] || TWITCH_PREDICTION_TYPES.progress;
+
+  return {
+    type,
+    subscription: { type },
+    event: cloneJson(state.prediction.currentPrediction)
+  };
+}
+
 function summarizePredictionState() {
   return {
     title: state.prediction.title,
-    status: state.prediction.status,
+    status: state.prediction.currentPredictionStatus || state.prediction.status,
+    stage: state.prediction.currentPredictionStage,
     outcome_count: state.prediction.outcomes.length,
     winning_outcome_id: state.prediction.winningOutcomeId,
     total_users: state.prediction.outcomes.reduce((total, outcome) => total + outcome.users, 0),
@@ -1669,18 +2551,21 @@ function summarizePredictionState() {
 function renderWorkerControls() {
   elements.workerInterceptToggle.checked = state.worker.interceptWebSocket;
   elements.workerUrlInput.value = state.worker.workerUrl;
+  elements.workerReplayMode.value = state.worker.replayMode;
   updateWorkerConnectionCount();
 }
 
-function sendWorkerConfig() {
+function sendWorkerConfig(target = "all") {
   postToWidgetFrames({
     source: LAB_SOURCE,
     type: "WORKER_MOCK_CONFIG",
     config: {
       interceptWebSocket: state.worker.interceptWebSocket,
-      workerUrl: state.worker.workerUrl
+      workerUrl: state.worker.workerUrl,
+      replayMode: state.worker.replayMode,
+      predictionState: buildWorkerPredictionStateSnapshot()
     }
-  });
+  }, { target });
 }
 
 function sendWorkerWelcome() {
@@ -1704,12 +2589,33 @@ function sendWorkerBridgeError() {
   postWorkerBroadcast("WORKER_MOCK_BRIDGE_ERROR", payload, "Worker bridge.error");
 }
 
+function replayWorkerLastPayload() {
+  postWorkerBroadcast("WORKER_MOCK_REPLAY_LAST", state.prediction.lastPredictionPayload, "Worker replay last payload", {
+    recordPrediction: false
+  });
+}
+
+function replayWorkerCurrentPrediction() {
+  postWorkerBroadcast("WORKER_MOCK_REPLAY_CURRENT", buildCurrentPredictionSnapshotPayload(), "Worker replay current prediction", {
+    recordPrediction: false
+  });
+}
+
+function replayWorkerHistory() {
+  postWorkerBroadcast("WORKER_MOCK_REPLAY_HISTORY", {
+    type: "lab.history.replay",
+    events: state.prediction.predictionHistory.map((item) => item.payload)
+  }, "Worker replay full history", {
+    recordPrediction: false
+  });
+}
+
 function sendWorkerPrediction(stage) {
   syncPredictionFromControls();
 
   if (stage === "begin") {
     startPredictionWindow();
-    state.prediction.status = "active";
+    setPredictionRuntimeStatus("active", "begin");
     state.prediction.lockedAt = null;
     state.prediction.endedAt = null;
   } else {
@@ -1717,25 +2623,34 @@ function sendWorkerPrediction(stage) {
   }
 
   if (stage === "lock") {
-    state.prediction.status = "locked";
+    setPredictionRuntimeStatus("locked", "lock");
     state.prediction.lockedAt = new Date().toISOString();
   }
 
   if (stage === "end") {
-    state.prediction.status = "resolved";
+    setPredictionRuntimeStatus("resolved", "end");
     state.prediction.endedAt = new Date().toISOString();
     state.prediction.winningOutcomeId = state.prediction.winningOutcomeId || state.prediction.outcomes[0]?.id || null;
   }
 
   const payload = buildPredictionPayload(stage);
+  renderPredictionControls();
   postWorkerBroadcast("WORKER_MOCK_BROADCAST", payload, `Worker ${payload.type}`);
 }
 
-function postWorkerBroadcast(type, payload, label) {
-  if (type !== "WORKER_MOCK_CONFIG" && state.worker.openConnections.size === 0) {
-    writeLog("warn", "lab", "No mocked WebSocket connections open. The widget may not have connected yet or the URL was not intercepted.", {
+function postWorkerBroadcast(type, payload, label, options = {}) {
+  const target = options.target || state.overlays.deliveryTarget || "all";
+  const openConnectionCount = countOpenMockConnections(target);
+
+  if (isPredictionPayload(payload) && options.recordPrediction !== false) {
+    recordPredictionPayload(payload, label);
+  }
+
+  if (type !== "WORKER_MOCK_CONFIG" && openConnectionCount === 0) {
+    writeLog("warn", "lab", "No mocked WebSocket connections open. The widget may be hidden, reloading or not connected.", {
       label,
       activeWidget: state.selectedWidget?.id || null,
+      overlayTarget: target,
       workerUrl: state.worker.workerUrl,
       interceptWebSocket: state.worker.interceptWebSocket,
       expectedIntercept: "Worker mock intercepts WebSocket URLs containing /ws or the configured Worker URL.",
@@ -1747,22 +2662,54 @@ function postWorkerBroadcast(type, payload, label) {
     source: LAB_SOURCE,
     type,
     payload
-  });
+  }, { target });
 
   writeLog("info", "lab", `${label} broadcast solicitado`, {
     timestamp: new Date().toISOString(),
+    channel: "Worker WebSocket",
+    overlayTarget: target,
     summary: summarizeWorkerPayload(payload),
-    openMockWebSockets: state.worker.openConnections.size,
+    openMockWebSockets: openConnectionCount,
+    currentPredictionStatus: state.prediction.currentPredictionStatus,
     payload
   });
 }
 
-function postToWidgetFrames(message) {
-  const frames = document.querySelectorAll("iframe");
+function postToWidgetFrames(message, options = {}) {
+  const frames = getTargetFrames(options.target || "all");
 
   for (const frame of frames) {
     frame.contentWindow?.postMessage(message, "*");
   }
+}
+
+function getTargetFrames(target = "all") {
+  if (target === "all") {
+    return Array.from(document.querySelectorAll("iframe[data-overlay-id]"));
+  }
+
+  if (target === "active") {
+    return [getOverlayFrame(state.overlays.activeId)].filter(Boolean);
+  }
+
+  return [getOverlayFrame(target)].filter(Boolean);
+}
+
+function countOpenMockConnections(target = "all") {
+  if (target === "all") {
+    return state.worker.openConnections.size;
+  }
+
+  const overlayId = target === "active" ? state.overlays.activeId : target;
+  let count = 0;
+
+  for (const connection of state.worker.openConnections.values()) {
+    if (connection.overlayId === overlayId) {
+      count += 1;
+    }
+  }
+
+  return count;
 }
 
 function summarizeWorkerPayload(payload) {
@@ -1785,39 +2732,26 @@ function summarizeWorkerPayload(payload) {
     };
   }
 
-  return summarizePredictionPayload(payload);
+  if (isPredictionPayload(payload)) {
+    return summarizePredictionPayload(payload);
+  }
+
+  return {
+    type: payload.type || "message",
+    keys: Object.keys(payload)
+  };
 }
 
 function appendWorkerConnectionLog(entry) {
-  const item = document.createElement("li");
-  const title = document.createElement("strong");
-  const meta = document.createElement("code");
-
   updateWorkerOpenConnections(entry);
-  item.className = "worker-connection-entry";
-  title.textContent = `${entry.kind || "worker"} - ${entry.summary || ""}`;
-  meta.textContent = `${entry.timestamp || new Date().toISOString()} | ${entry.connectionId || "-"} | ${entry.url || ""}`;
-  item.append(title, meta);
-
-  if (entry.payload) {
-    const payload = document.createElement("code");
-    payload.textContent = stringifyLogData(entry.payload);
-    item.append(payload);
-  }
-
-  elements.workerConnectionList.prepend(item);
-
-  while (elements.workerConnectionList.children.length > 40) {
-    elements.workerConnectionList.lastElementChild.remove();
-  }
-
   state.worker.connectionLogCount += 1;
-  updateWorkerConnectionCount();
+  renderWorkerConnectionList();
 
   if (entry.kind === "connection.opening") {
     writeLog("info", "lab", "Widget created WebSocket", {
       connectionId: entry.connectionId,
       url: entry.url,
+      overlayId: entry.overlayId,
       intercepted: true
     });
   }
@@ -1826,6 +2760,7 @@ function appendWorkerConnectionLog(entry) {
     writeLog("info", "lab", "Mocked WebSocket intercepted and opened", {
       connectionId: entry.connectionId,
       url: entry.url,
+      overlayId: entry.overlayId,
       openMockWebSockets: state.worker.openConnections.size
     });
   }
@@ -1837,8 +2772,16 @@ function appendWorkerConnectionLog(entry) {
     });
   }
 
+  if (entry.kind === "message.from-widget") {
+    writeLog("info", "worker", "Widget sent message to Worker mock", {
+      connectionId: entry.connectionId,
+      overlayId: entry.overlayId,
+      payload: entry.payload
+    });
+  }
+
   if (entry.kind === "broadcast" && Number(entry.delivered || 0) === 0) {
-    writeLog("warn", "lab", "No mocked WebSocket connections open. The widget may not have connected yet or the URL was not intercepted.", {
+    writeLog("warn", "lab", "No mocked WebSocket connections open. The widget may be hidden, reloading or not connected.", {
       openConnections: entry.openConnections || 0,
       payload: entry.payload
     });
@@ -1853,10 +2796,28 @@ function updateWorkerOpenConnections(entry) {
   }
 
   if (entry.kind === "connection.open" || entry.kind === "connection.opening") {
+    const existing = state.worker.openConnections.get(connectionId) || {};
     state.worker.openConnections.set(connectionId, {
+      ...existing,
       url: entry.url,
-      openedAt: entry.timestamp || new Date().toISOString()
+      readyState: entry.readyState || (entry.kind === "connection.open" ? "OPEN" : "CONNECTING"),
+      overlayId: entry.overlayId || existing.overlayId || "?",
+      connectedAt: existing.connectedAt || entry.timestamp || new Date().toISOString(),
+      lastMessageAt: existing.lastMessageAt || null
     });
+  }
+
+  if (entry.kind === "message.to-widget" || entry.kind === "message.from-widget") {
+    const existing = state.worker.openConnections.get(connectionId);
+
+    if (existing) {
+      state.worker.openConnections.set(connectionId, {
+        ...existing,
+        readyState: entry.readyState || existing.readyState || "OPEN",
+        overlayId: entry.overlayId || existing.overlayId,
+        lastMessageAt: entry.timestamp || new Date().toISOString()
+      });
+    }
   }
 
   if (entry.kind === "connection.close") {
@@ -1865,10 +2826,41 @@ function updateWorkerOpenConnections(entry) {
 }
 
 function updateWorkerConnectionCount() {
-  elements.workerConnectionCount.textContent = String(state.worker.connectionLogCount);
+  elements.workerConnectionCount.textContent = String(state.worker.openConnections.size);
+  renderPredictionStateSummary();
+  renderOverlayStatus();
 }
 
-function renderIframe({ manifest, html, css, script, fieldsSchema, fieldData, harnessScripts }) {
+function renderWorkerConnectionList() {
+  elements.workerConnectionList.replaceChildren();
+
+  if (state.worker.openConnections.size === 0) {
+    const empty = document.createElement("li");
+    empty.className = "worker-connection-entry is-empty";
+    empty.textContent = "No hay conexiones WebSocket mock abiertas.";
+    elements.workerConnectionList.append(empty);
+    updateWorkerConnectionCount();
+    return;
+  }
+
+  for (const [connectionId, connection] of state.worker.openConnections.entries()) {
+    const item = document.createElement("li");
+    const title = document.createElement("strong");
+    const meta = document.createElement("code");
+    const activity = document.createElement("code");
+
+    item.className = "worker-connection-entry";
+    title.textContent = `${connectionId} | Overlay ${connection.overlayId || "?"} | ${connection.readyState || "OPEN"}`;
+    meta.textContent = connection.url || "";
+    activity.textContent = `connectedAt=${connection.connectedAt || "-"} | lastMessageAt=${connection.lastMessageAt || "-"}`;
+    item.append(title, meta, activity);
+    elements.workerConnectionList.append(item);
+  }
+
+  updateWorkerConnectionCount();
+}
+
+function renderIframe({ manifest, html, css, script, fieldsSchema, fieldData, harnessScripts, frame = elements.frame, overlayId = "A" }) {
   const documentHtml = buildIframeDocument({
     manifest,
     html,
@@ -1876,13 +2868,16 @@ function renderIframe({ manifest, html, css, script, fieldsSchema, fieldData, ha
     script,
     fieldsSchema,
     fieldData,
-    harnessScripts
+    harnessScripts,
+    overlayId
   });
 
-  elements.frame.srcdoc = documentHtml;
+  if (frame) {
+    frame.srcdoc = documentHtml;
+  }
 }
 
-function buildIframeDocument({ manifest, html, css, script, fieldsSchema, fieldData, harnessScripts }) {
+function buildIframeDocument({ manifest, html, css, script, fieldsSchema, fieldData, harnessScripts, overlayId }) {
   const bridgeScript = `
 (() => {
   const source = ${JSON.stringify(WIDGET_SOURCE)};
@@ -1919,6 +2914,13 @@ function buildIframeDocument({ manifest, html, css, script, fieldsSchema, fieldD
   window.__LAB_FIELDS_SCHEMA__ = ${escapeScript(JSON.stringify(fieldsSchema))};
   window.__LAB_FIELDS__ = ${escapeScript(JSON.stringify(fieldData))};
   window.__LAB_WIDGET_MANIFEST__ = ${escapeScript(JSON.stringify(manifest))};
+  window.__LAB_OVERLAY_ID__ = ${escapeScript(JSON.stringify(overlayId || "A"))};
+  window.__LAB_WORKER_INITIAL_CONFIG__ = ${escapeScript(JSON.stringify({
+    interceptWebSocket: state.worker.interceptWebSocket,
+    workerUrl: state.worker.workerUrl,
+    replayMode: state.worker.replayMode
+  }))};
+  window.__LAB_WORKER_INITIAL_STATE__ = ${escapeScript(JSON.stringify(buildWorkerPredictionStateSnapshot()))};
   window.__LAB_LOG__ = (level, message, data) => {
     send("LOG", { level, message: String(message), data: safeValue(data) });
   };

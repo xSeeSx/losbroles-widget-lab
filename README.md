@@ -165,6 +165,35 @@ Los mensajes de prediccion enviados por el mock del Worker usan el mismo contrat
 }
 ```
 
+## Prediction torture testing
+
+El panel `Prediction Lab` mantiene el ciclo feliz de Twitch Predictions, pero tambien permite reproducir estados raros de directo y problemas de OBS/overlays. En `Twitch valid mode` aplica los limites oficiales usados por Twitch: 2-10 outcomes, titulo de prediccion de hasta 45 caracteres, titulo de outcome de hasta 25 caracteres y `prediction_window` entre 30 y 1800 segundos. En `Stress mode` se pueden generar duraciones cortas como 1s, `locks_at` en pasado, progress tras expiracion y eventos fuera de orden.
+
+Para el widget real `Prediccion`, los eventos relevantes son los del Worker WebSocket. Los eventos directos del panel Twitch Predictions pueden reenviarse al Worker mock por compatibilidad, pero el widget importado escucha mensajes JSON por WebSocket, no el evento interno `twitch:eventsub`.
+
+El laboratorio guarda `currentPrediction`, `predictionHistory`, `lastPredictionPayload`, `currentPredictionStatus` y `currentPredictionStage`. El Worker mock soporta replay en conexiones nuevas:
+
+- `welcome only` mantiene el comportamiento por defecto.
+- `none` no envia nada al conectar.
+- `last payload` reenvia el ultimo payload.
+- `current prediction snapshot` reenvia el estado actual.
+- `full history` reenvia el historial completo.
+
+La seccion `Overlay / OBS scenarios` permite ocultar una fuente sin destruirla, mostrarla, refrescarla como Browser Source, desactivar/activar escena, cerrar WebSockets al ocultar, duplicar el widget como Overlay A/B y enviar payloads al overlay activo, a A, a B o a todos. Cada overlay tiene su propio WebSocket mock y los broadcasts pueden llegar a ambas instancias.
+
+Para reproducir el bug de overlays:
+
+1. Selecciona `Prediccion`.
+2. Pulsa `onWidgetLoad`.
+3. Cambia a `Stress mode`.
+4. Pulsa `Begin 1s stress`.
+5. Pulsa `Active expired, no lock, no end`.
+6. Pulsa `Lock sin resolver` o `Lock y esperar fade`.
+7. Espera 16 segundos si quieres forzar el ocultado interno tras lock.
+8. Usa `Hide source`, `Refresh source` o `Duplicate overlay instance`.
+9. Pulsa `End despues de lock tardio`.
+10. Observa si el widget queda en un estado visual colgado o desincronizado entre Overlay A y Overlay B.
+
 ## Almacen de widgets
 
 `widgets/registry.json` es la fuente principal. Cada entrada debe incluir:

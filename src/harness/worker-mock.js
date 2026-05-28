@@ -5,8 +5,20 @@
   const connections = new Map();
   const NativeWebSocket = window.WebSocket;
   let nextConnectionId = 1;
-  let interceptWorkerWebSocket = true;
-  let workerUrl = "";
+  const initialConfig = window.__LAB_WORKER_INITIAL_CONFIG__ || {};
+  let interceptWorkerWebSocket = initialConfig.interceptWebSocket !== false;
+  let workerUrl = String(initialConfig.workerUrl || "");
+  let replayMode = String(initialConfig.replayMode || "welcome");
+  const overlayId = window.__LAB_OVERLAY_ID__ || "A";
+  const predictionState = {
+    currentPrediction: null,
+    predictionHistory: [],
+    lastPredictionPayload: null,
+    currentPredictionStatus: "idle",
+    currentPredictionStage: "idle"
+  };
+
+  mergePredictionState(window.__LAB_WORKER_INITIAL_STATE__);
 
   function log(level, message, data) {
     if (typeof window.__LAB_LOG__ === "function") {
@@ -57,9 +69,88 @@
     sendToLab("WORKER_WS_LOG", {
       entry: {
         timestamp: new Date().toISOString(),
+        overlayId,
         ...entry
       }
     });
+  }
+
+  function isPredictionPayload(payload) {
+    return Boolean(payload?.type && String(payload.type).startsWith("channel.prediction."));
+  }
+
+  function mergePredictionState(nextState) {
+    if (!nextState || typeof nextState !== "object") {
+      return;
+    }
+
+    predictionState.currentPrediction = clone(nextState.currentPrediction) || predictionState.currentPrediction;
+    predictionState.predictionHistory = Array.isArray(nextState.predictionHistory)
+      ? clone(nextState.predictionHistory)
+      : predictionState.predictionHistory;
+    predictionState.lastPredictionPayload = clone(nextState.lastPredictionPayload) || predictionState.lastPredictionPayload;
+    predictionState.currentPredictionStatus = nextState.currentPredictionStatus || predictionState.currentPredictionStatus;
+    predictionState.currentPredictionStage = nextState.currentPredictionStage || predictionState.currentPredictionStage;
+  }
+
+  function updatePredictionStateFromPayload(payload) {
+    if (!isPredictionPayload(payload)) {
+      return;
+    }
+
+    const stage = String(payload.type).replace("channel.prediction.", "");
+    predictionState.lastPredictionPayload = clone(payload);
+    predictionState.currentPrediction = clone(payload.event || {});
+    predictionState.currentPredictionStage = stage;
+    predictionState.currentPredictionStatus = inferPredictionStatus(payload);
+    predictionState.predictionHistory.push(clone(payload));
+
+    if (predictionState.predictionHistory.length > 100) {
+      predictionState.predictionHistory.shift();
+    }
+  }
+
+  function inferPredictionStatus(payload) {
+    const stage = String(payload.type || "").replace("channel.prediction.", "");
+    const event = payload.event || {};
+
+    if (stage === "end") {
+      return event.status === "canceled" ? "canceled" : "resolved";
+    }
+
+    if (stage === "lock") {
+      return "locked_waiting_resolution";
+    }
+
+    if ((stage === "begin" || stage === "progress") && event.locks_at && new Date(event.locks_at).getTime() < Date.now()) {
+      return "active_expired";
+    }
+
+    return "active";
+  }
+
+  function buildCurrentPredictionPayload() {
+    if (!predictionState.currentPrediction) {
+      return predictionState.lastPredictionPayload;
+    }
+
+    let stage = predictionState.currentPredictionStage || "progress";
+
+    if (predictionState.currentPredictionStatus === "resolved" || predictionState.currentPredictionStatus === "canceled") {
+      stage = "end";
+    } else if (predictionState.currentPredictionStatus === "locked" || predictionState.currentPredictionStatus === "locked_waiting_resolution") {
+      stage = "lock";
+    } else if (stage === "idle") {
+      stage = "progress";
+    }
+
+    const type = `channel.prediction.${stage}`;
+
+    return {
+      type,
+      subscription: { type },
+      event: clone(predictionState.currentPrediction)
+    };
   }
 
   function emitSocketEvent(socket, event) {
@@ -137,7 +228,7 @@
           : new NativeWebSocket(url, protocols);
       }
 
-      this.id = `mock-ws-${nextConnectionId}`;
+      this.id = `${overlayId}-mock-ws-${nextConnectionId}`;
       nextConnectionId += 1;
       this.url = String(url);
       this.protocol = "";
@@ -155,6 +246,7 @@
         kind: "connection.opening",
         connectionId: this.id,
         url: this.url,
+        readyState: "CONNECTING",
         summary: "Opening mocked Worker WebSocket"
       });
 
@@ -169,12 +261,10 @@
           kind: "connection.open",
           connectionId: this.id,
           url: this.url,
+          readyState: "OPEN",
           summary: "Mocked Worker WebSocket open"
         });
-        this.receive({
-          type: "welcome",
-          session_id: DEFAULT_SESSION_ID
-        });
+        replayOnOpen(this);
       });
     }
 
@@ -187,6 +277,7 @@
         kind: "message.from-widget",
         connectionId: this.id,
         url: this.url,
+        readyState: readyStateName(this.readyState),
         summary: "Widget sent message to Worker mock",
         payload: parseSocketMessage(data)
       });
@@ -210,6 +301,7 @@
           kind: "connection.close",
           connectionId: this.id,
           url: this.url,
+          readyState: "CLOSED",
           summary: "Mocked Worker WebSocket closed",
           payload: { code, reason }
         });
@@ -227,6 +319,7 @@
         kind: "message.to-widget",
         connectionId: this.id,
         url: this.url,
+        readyState: readyStateName(this.readyState),
         summary: summarizePayload(payload),
         payload: clone(payload)
       });
@@ -237,6 +330,60 @@
   LabWebSocketMock.OPEN = 1;
   LabWebSocketMock.CLOSING = 2;
   LabWebSocketMock.CLOSED = 3;
+
+  function readyStateName(value) {
+    if (value === LabWebSocketMock.CONNECTING) {
+      return "CONNECTING";
+    }
+
+    if (value === LabWebSocketMock.OPEN) {
+      return "OPEN";
+    }
+
+    if (value === LabWebSocketMock.CLOSING) {
+      return "CLOSING";
+    }
+
+    if (value === LabWebSocketMock.CLOSED) {
+      return "CLOSED";
+    }
+
+    return String(value);
+  }
+
+  function replayOnOpen(socket) {
+    if (replayMode === "none") {
+      return;
+    }
+
+    if (replayMode === "last-payload") {
+      if (predictionState.lastPredictionPayload) {
+        socket.receive(predictionState.lastPredictionPayload);
+      }
+      return;
+    }
+
+    if (replayMode === "current-snapshot") {
+      const payload = buildCurrentPredictionPayload();
+
+      if (payload) {
+        socket.receive(payload);
+      }
+      return;
+    }
+
+    if (replayMode === "full-history") {
+      for (const payload of predictionState.predictionHistory) {
+        socket.receive(payload);
+      }
+      return;
+    }
+
+    socket.receive({
+      type: "welcome",
+      session_id: DEFAULT_SESSION_ID
+    });
+  }
 
   function summarizePayload(payload) {
     if (!payload || typeof payload !== "object") {
@@ -258,9 +405,13 @@
     return `${payload.type || "message"} ${event.title || ""} users=${outcomes.reduce((total, outcome) => total + Number(outcome.users || 0), 0)} points=${points}`.trim();
   }
 
-  function broadcast(payload) {
+  function broadcast(payload, options = {}) {
     let delivered = 0;
     const openConnections = connections.size;
+
+    if (options.recordPrediction !== false) {
+      updatePredictionStateFromPayload(payload);
+    }
 
     for (const socket of connections.values()) {
       socket.receive(payload);
@@ -297,9 +448,63 @@
     });
   }
 
+  function replayLastPayload() {
+    return predictionState.lastPredictionPayload
+      ? broadcast(predictionState.lastPredictionPayload, { recordPrediction: false })
+      : broadcast({
+        type: "bridge.error",
+        error: {
+          code: "mock_no_last_payload",
+          message: "No last prediction payload stored in Worker mock"
+        }
+      });
+  }
+
+  function replayCurrentPrediction() {
+    const payload = buildCurrentPredictionPayload();
+
+    return payload
+      ? broadcast(payload, { recordPrediction: false })
+      : broadcast({
+        type: "bridge.error",
+        error: {
+          code: "mock_no_current_prediction",
+          message: "No current prediction snapshot stored in Worker mock"
+        }
+      });
+  }
+
+  function replayFullHistory() {
+    let delivered = 0;
+
+    for (const payload of predictionState.predictionHistory) {
+      delivered += broadcast(payload, { recordPrediction: false });
+    }
+
+    if (predictionState.predictionHistory.length === 0) {
+      return broadcast({
+        type: "bridge.error",
+        error: {
+          code: "mock_no_prediction_history",
+          message: "No prediction history stored in Worker mock"
+        }
+      });
+    }
+
+    return delivered;
+  }
+
+  function closeAll(reason = "mock closed by lab") {
+    for (const socket of Array.from(connections.values())) {
+      socket.close(1000, reason);
+    }
+  }
+
   function configure(nextConfig = {}) {
     interceptWorkerWebSocket = nextConfig.interceptWebSocket !== false;
     workerUrl = String(nextConfig.workerUrl || "");
+    replayMode = String(nextConfig.replayMode || "welcome");
+    mergePredictionState(nextConfig.predictionState);
     emitWorkerConsole({
       kind: "config",
       connectionId: "-",
@@ -307,7 +512,9 @@
       summary: `WebSocket interception ${interceptWorkerWebSocket ? "enabled" : "disabled"}`,
       payload: {
         interceptWebSocket: interceptWorkerWebSocket,
-        workerUrl
+        workerUrl,
+        replayMode,
+        predictionState: clone(predictionState)
       }
     });
   }
@@ -329,6 +536,10 @@
     broadcast,
     sendWelcome,
     sendBridgeError,
+    replayLastPayload,
+    replayCurrentPrediction,
+    replayFullHistory,
+    closeAll,
     get connections() {
       return Array.from(connections.keys());
     },
@@ -361,6 +572,26 @@
 
     if (data.type === "WORKER_MOCK_BROADCAST") {
       broadcast(data.payload);
+      return;
+    }
+
+    if (data.type === "WORKER_MOCK_REPLAY_LAST") {
+      replayLastPayload();
+      return;
+    }
+
+    if (data.type === "WORKER_MOCK_REPLAY_CURRENT") {
+      replayCurrentPrediction();
+      return;
+    }
+
+    if (data.type === "WORKER_MOCK_REPLAY_HISTORY") {
+      replayFullHistory();
+      return;
+    }
+
+    if (data.type === "WORKER_MOCK_CLOSE") {
+      closeAll(data.reason || "mock closed by lab");
     }
   });
 
