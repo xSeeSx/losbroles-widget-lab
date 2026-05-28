@@ -252,6 +252,45 @@ textarea:focus-visible {
   grid-template-columns: 1fr;
 }
 
+.control-group {
+  display: grid;
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fbfcfd;
+  padding: 10px;
+}
+
+.control-group h3,
+.advanced-block summary {
+  margin: 0;
+  color: var(--ink);
+  font-size: 0.82rem;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.advanced-block {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #ffffff;
+  padding: 8px 10px;
+}
+
+.advanced-block summary {
+  cursor: pointer;
+}
+
+.advanced-block .button-stack {
+  margin-top: 10px;
+}
+
+.helper-text {
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
 .button-stack button[data-se-action].is-active {
   box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.44);
 }

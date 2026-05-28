@@ -56,7 +56,7 @@ El despliegue automatico se ejecuta con GitHub Actions desde `.github/workflows/
 - Los botones emiten payloads mock de StreamElements: `onWidgetLoad`, chat message, follow, subscriber, tip, cheer y `kvstore:update`.
 - El editor JSON muestra el payload del ultimo boton usado. Edita el JSON y pulsa el mismo boton para reenviarlo con cambios.
 - La validacion JSON aparece en pantalla y bloquea el envio cuando el payload no es valido.
-- El panel Twitch Predictions simula el ciclo EventSub de predicciones: begin, progress, lock y end.
+- El panel Prediction Lab simula el ciclo EventSub de predicciones: begin, progress, lock, end y escenarios de stress.
 - El panel Worker WebSocket simula los mensajes que llegarian desde el Cloudflare Worker sin conectarse al Worker real por defecto.
 - La consola en pantalla recibe logs del laboratorio y del widget aislado.
 - Las secciones del panel lateral son colapsables y el panel tiene scroll propio para mantener visible la zona de preview.
@@ -151,7 +151,7 @@ El panel Worker WebSocket incluye:
 - botones para enviar `welcome`, `bridge.error` y predicciones `begin`, `progress`, `lock`, `end`;
 - consola de conexiones WebSocket mock.
 
-Cuando el widget activo es `Prediccion`, el laboratorio tambien reenvia los eventos del panel `Twitch Predictions` por el WebSocket mock, porque ese widget real espera recibir predicciones como JSON de Worker y no escucha el evento interno `twitch:eventsub`.
+Cuando el widget activo es `Prediccion`, el laboratorio tambien reenvia los eventos del panel `Prediction Lab` por el WebSocket mock, porque ese widget real espera recibir predicciones como JSON de Worker y no escucha el evento interno `twitch:eventsub`.
 
 Los mensajes de prediccion enviados por el mock del Worker usan el mismo contrato de Twitch EventSub:
 
@@ -167,9 +167,16 @@ Los mensajes de prediccion enviados por el mock del Worker usan el mismo contrat
 
 ## Prediction torture testing
 
-El panel `Prediction Lab` mantiene el ciclo feliz de Twitch Predictions, pero tambien permite reproducir estados raros de directo y problemas de OBS/overlays. En `Twitch valid mode` aplica los limites oficiales usados por Twitch: 2-10 outcomes, titulo de prediccion de hasta 45 caracteres, titulo de outcome de hasta 25 caracteres y `prediction_window` entre 30 y 1800 segundos. En `Stress mode` se pueden generar duraciones cortas como 1s, `locks_at` en pasado, progress tras expiracion y eventos fuera de orden.
+`Prediction Lab` es el panel recomendado para probar predicciones en uso normal. Esta organizado en:
 
-Para el widget real `Prediccion`, los eventos relevantes son los del Worker WebSocket. Los eventos directos del panel Twitch Predictions pueden reenviarse al Worker mock por compatibilidad, pero el widget importado escucha mensajes JSON por WebSocket, no el evento interno `twitch:eventsub`.
+- `Prediction setup`: modo Twitch/stress, titulo, duracion, numero de opciones, presets 2/3/5/10, ganador seleccionado, outcomes, validacion y estado interno.
+- `Vote generator`: patrones de votos y `Send progress` para emitir `channel.prediction.progress` con los votos actuales.
+- `Normal flow`: `Begin`, `Progress`, `Lock`, `End selected winner` y `Cancel`.
+- `Stress scenarios`: casos raros de directo como `Begin 1s stress`, `active_expired`, lock sin resolver, fade tras lock, end tardio y reset del estado del laboratorio.
+
+En `Twitch valid mode` aplica los limites oficiales usados por Twitch: 2-10 outcomes, titulo de prediccion de hasta 45 caracteres, titulo de outcome de hasta 25 caracteres y `prediction_window` entre 30 y 1800 segundos. En `Stress mode` se pueden generar duraciones cortas como 1s, `locks_at` en pasado, progress tras expiracion y eventos fuera de orden.
+
+Para el widget real `Prediccion`, los eventos relevantes son los del Worker WebSocket. Los eventos directos del panel Twitch Predictions pueden reenviarse al Worker mock por compatibilidad, pero el widget importado escucha mensajes JSON por WebSocket, no el evento interno `twitch:eventsub`. Los botones de bajo nivel del panel `Worker WebSocket` quedan dentro de `Worker debug actions`; para el flujo habitual usa `Prediction Lab`.
 
 El laboratorio guarda `currentPrediction`, `predictionHistory`, `lastPredictionPayload`, `currentPredictionStatus` y `currentPredictionStage`. El Worker mock soporta replay en conexiones nuevas:
 
@@ -179,7 +186,15 @@ El laboratorio guarda `currentPrediction`, `predictionHistory`, `lastPredictionP
 - `current prediction snapshot` reenvia el estado actual.
 - `full history` reenvia el historial completo.
 
-La seccion `Overlay / OBS scenarios` permite ocultar una fuente sin destruirla, mostrarla, refrescarla como Browser Source, desactivar/activar escena, cerrar WebSockets al ocultar, duplicar el widget como Overlay A/B y enviar payloads al overlay activo, a A, a B o a todos. Cada overlay tiene su propio WebSocket mock y los broadcasts pueden llegar a ambas instancias.
+La seccion `Overlay / OBS scenarios` permite ocultar una fuente, mostrarla, refrescarla como Browser Source, desactivar/activar escena, duplicar el widget como Overlay A/B y elegir el destino del Worker con el selector `Destino Worker`. Cambiar ese selector no emite payloads; para reenviar estado usa explicitamente `Replay last payload`, `Replay current prediction` o `Replay full history`.
+
+Modos de overlay oculto:
+
+- `Deliver while hidden`: solo oculta visualmente el iframe. El widget sigue cargado y recibe eventos.
+- `Skip delivery while hidden`: el iframe sigue cargado, pero el laboratorio excluye overlays ocultos al enviar eventos.
+- `Destroy iframe when hidden`: elimina el iframe y sus conexiones WebSocket. Al mostrarlo se recrea desde el widget cargado y depende del `Replay mode` configurado para recuperar o no estado.
+
+Cada overlay tiene su propio WebSocket mock y los broadcasts pueden llegar a ambas instancias cuando el destino es `Broadcast to all overlays`.
 
 Para reproducir el bug de overlays:
 

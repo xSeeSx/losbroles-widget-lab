@@ -147,7 +147,7 @@ const state = {
   overlays: {
     activeId: "A",
     deliveryTarget: "all",
-    shutdownWhenHidden: false,
+    hiddenDeliveryMode: "deliver",
     instances: {
       A: {
         id: "A",
@@ -253,6 +253,8 @@ function bindElements() {
   elements.predictionOutcomes = document.querySelector("#predictionOutcomes");
   elements.predictionVotePattern = document.querySelector("#predictionVotePattern");
   elements.predictionApplyVotePatternButton = document.querySelector("#predictionApplyVotePatternButton");
+  elements.predictionSendProgressButton = document.querySelector("#predictionSendProgressButton");
+  elements.predictionNormalProgressButton = document.querySelector("#predictionNormalProgressButton");
   elements.predictionCreateButton = document.querySelector("#predictionCreateButton");
   elements.predictionBeginNormalButton = document.querySelector("#predictionBeginNormalButton");
   elements.predictionBeginTenButton = document.querySelector("#predictionBeginTenButton");
@@ -291,17 +293,13 @@ function bindElements() {
   elements.workerConnectionList = document.querySelector("#workerConnectionList");
   elements.overlayActiveSelect = document.querySelector("#overlayActiveSelect");
   elements.overlayDeliveryTarget = document.querySelector("#overlayDeliveryTarget");
-  elements.overlayShutdownWhenHidden = document.querySelector("#overlayShutdownWhenHidden");
+  elements.overlayHiddenDeliveryMode = document.querySelector("#overlayHiddenDeliveryMode");
   elements.overlayHideButton = document.querySelector("#overlayHideButton");
   elements.overlayShowButton = document.querySelector("#overlayShowButton");
   elements.overlayRefreshButton = document.querySelector("#overlayRefreshButton");
   elements.overlayDeactivateButton = document.querySelector("#overlayDeactivateButton");
   elements.overlayActivateButton = document.querySelector("#overlayActivateButton");
   elements.overlayDuplicateButton = document.querySelector("#overlayDuplicateButton");
-  elements.overlaySendActiveButton = document.querySelector("#overlaySendActiveButton");
-  elements.overlayBroadcastButton = document.querySelector("#overlayBroadcastButton");
-  elements.overlaySendAButton = document.querySelector("#overlaySendAButton");
-  elements.overlaySendBButton = document.querySelector("#overlaySendBButton");
   elements.overlayReloadBLockedButton = document.querySelector("#overlayReloadBLockedButton");
   elements.overlayEndHiddenButton = document.querySelector("#overlayEndHiddenButton");
   elements.overlayReconnectExpiredButton = document.querySelector("#overlayReconnectExpiredButton");
@@ -412,6 +410,8 @@ function bindEvents() {
     button.addEventListener("click", () => setPredictionOutcomeCount(button.dataset.predictionCount));
   }
   elements.predictionApplyVotePatternButton.addEventListener("click", applySelectedVotePattern);
+  elements.predictionSendProgressButton.addEventListener("click", sendPredictionProgressWithCurrentVotes);
+  elements.predictionNormalProgressButton.addEventListener("click", sendPredictionProgressWithCurrentVotes);
   elements.predictionCreateButton.addEventListener("click", createPrediction);
   elements.predictionBeginNormalButton.addEventListener("click", beginNormalPrediction);
   elements.predictionBeginTenButton.addEventListener("click", beginTenOutcomePrediction);
@@ -461,12 +461,14 @@ function bindEvents() {
 
   elements.overlayActiveSelect.addEventListener("change", () => setActiveOverlay(elements.overlayActiveSelect.value));
   elements.overlayDeliveryTarget.addEventListener("change", () => {
-    state.overlays.deliveryTarget = elements.overlayDeliveryTarget.value;
-    renderOverlayStatus();
+    setOverlayDeliveryTarget(elements.overlayDeliveryTarget.value);
   });
-  elements.overlayShutdownWhenHidden.addEventListener("change", () => {
-    state.overlays.shutdownWhenHidden = elements.overlayShutdownWhenHidden.checked;
+  elements.overlayHiddenDeliveryMode.addEventListener("change", () => {
+    state.overlays.hiddenDeliveryMode = elements.overlayHiddenDeliveryMode.value;
     renderOverlayStatus();
+    writeLog("info", "lab", `Overlay hidden mode: ${state.overlays.hiddenDeliveryMode}`, {
+      hiddenDeliveryMode: state.overlays.hiddenDeliveryMode
+    });
   });
   elements.overlayHideButton.addEventListener("click", () => hideOverlay(state.overlays.activeId));
   elements.overlayShowButton.addEventListener("click", () => showOverlay(state.overlays.activeId));
@@ -474,10 +476,6 @@ function bindEvents() {
   elements.overlayDeactivateButton.addEventListener("click", deactivateScene);
   elements.overlayActivateButton.addEventListener("click", activateScene);
   elements.overlayDuplicateButton.addEventListener("click", duplicateOverlayInstance);
-  elements.overlaySendActiveButton.addEventListener("click", () => setOverlayDeliveryTarget("active"));
-  elements.overlayBroadcastButton.addEventListener("click", () => setOverlayDeliveryTarget("all"));
-  elements.overlaySendAButton.addEventListener("click", () => setOverlayDeliveryTarget("A"));
-  elements.overlaySendBButton.addEventListener("click", () => setOverlayDeliveryTarget("B"));
   elements.overlayReloadBLockedButton.addEventListener("click", runReloadOverlayBWhileLockedScenario);
   elements.overlayEndHiddenButton.addEventListener("click", runEndWhileHiddenScenario);
   elements.overlayReconnectExpiredButton.addEventListener("click", runReconnectWhileActiveExpiredScenario);
@@ -1404,6 +1402,7 @@ function resetOverlayInstancesForWidgetLoad() {
   clearOverlayConnections("A", "widget reload");
   clearOverlayConnections("B", "widget reload");
   state.overlays.activeId = "A";
+  state.overlays.hiddenDeliveryMode = state.overlays.hiddenDeliveryMode || "deliver";
   state.overlays.instances = {
     A: {
       id: "A",
@@ -1449,17 +1448,11 @@ function setOverlayDeliveryTarget(target) {
   state.overlays.deliveryTarget = target;
   elements.overlayDeliveryTarget.value = target;
   renderOverlayStatus();
-
-  if (state.prediction.lastPredictionPayload) {
-    postWorkerBroadcast("WORKER_MOCK_BROADCAST", state.prediction.lastPredictionPayload, `Overlay target ${target} last payload`, {
-      target,
-      recordPrediction: false
-    });
-  } else {
-    writeLog("warn", "lab", `Destino Worker cambiado a ${target}, pero no hay payload de prediccion para enviar`, {
-      overlayTarget: target
-    });
-  }
+  writeLog("info", "lab", `Destino Worker cambiado a ${target}`, {
+    overlayTarget: target,
+    emitsPayload: false,
+    replayActions: ["Replay last payload", "Replay current prediction", "Replay full history"]
+  });
 }
 
 function renderOverlayStatus() {
@@ -1476,8 +1469,8 @@ function renderOverlayStatus() {
 
   elements.overlayActiveSelect.value = state.overlays.activeId;
   elements.overlayDeliveryTarget.value = state.overlays.deliveryTarget;
-  elements.overlayShutdownWhenHidden.checked = state.overlays.shutdownWhenHidden;
-  elements.overlayStatus.textContent = `Activo ${state.overlays.activeId} | destino ${state.overlays.deliveryTarget} | ${overlays.join(" | ")}`;
+  elements.overlayHiddenDeliveryMode.value = state.overlays.hiddenDeliveryMode;
+  elements.overlayStatus.textContent = `Activo ${state.overlays.activeId} | destino ${state.overlays.deliveryTarget} | hidden ${state.overlays.hiddenDeliveryMode} | ${overlays.join(" | ")}`;
 }
 
 function duplicateOverlayInstance() {
@@ -1541,6 +1534,11 @@ function renderOverlayFromCache(overlayId) {
     return;
   }
 
+  state.overlays.instances[overlayId] = {
+    id: overlayId,
+    hidden: false,
+    loaded: true
+  };
   clearOverlayConnections(overlayId, "overlay render");
   renderIframe({ ...state.loadedWidgetDocument, frame, overlayId });
 }
@@ -1572,27 +1570,47 @@ function hideOverlay(overlayId, options = {}) {
 
   viewport.classList.add("is-overlay-hidden");
   state.overlays.instances[overlayId].hidden = true;
+
+  if (state.overlays.hiddenDeliveryMode === "destroy") {
+    destroyOverlayIframe(overlayId, "hidden by overlay mode");
+  }
+
   renderOverlayStatus();
 
   if (!options.silent) {
-    writeLog("info", "lab", `Overlay ${overlayId} ocultado visualmente`, {
+    writeLog("info", "lab", `Overlay ${overlayId} ocultado`, {
       action: "Hide source",
-      sendsEvents: false
+      hiddenDeliveryMode: state.overlays.hiddenDeliveryMode,
+      receivesEvents: state.overlays.hiddenDeliveryMode === "deliver",
+      loaded: state.overlays.instances[overlayId]?.loaded === true
     });
   }
 }
 
 function showOverlay(overlayId, options = {}) {
-  const viewport = getOverlayViewport(overlayId);
+  let viewport = getOverlayViewport(overlayId);
 
   if (!viewport) {
-    writeLog("warn", "lab", `Overlay ${overlayId} no existe`);
-    return;
+    ensureOverlayFrame(overlayId);
+    viewport = getOverlayViewport(overlayId);
   }
 
   viewport.classList.remove("is-overlay-hidden");
+  if (!state.overlays.instances[overlayId]) {
+    state.overlays.instances[overlayId] = {
+      id: overlayId,
+      hidden: false,
+      loaded: false
+    };
+  }
   state.overlays.instances[overlayId].hidden = false;
-  sendWorkerConfig(overlayId);
+
+  if (!getOverlayFrame(overlayId) || state.overlays.instances[overlayId].loaded === false) {
+    renderOverlayFromCache(overlayId);
+  } else {
+    sendWorkerConfig(overlayId);
+  }
+
   renderOverlayStatus();
 
   if (!options.silent) {
@@ -1607,12 +1625,8 @@ function deactivateScene() {
   const overlayId = state.overlays.activeId;
   hideOverlay(overlayId);
 
-  if (state.overlays.shutdownWhenHidden) {
-    closeOverlayWebSockets(overlayId, "scene deactivated");
-  }
-
   writeLog("info", "lab", `Scene deactivated para Overlay ${overlayId}`, {
-    shutdownWhenHidden: state.overlays.shutdownWhenHidden
+    hiddenDeliveryMode: state.overlays.hiddenDeliveryMode
   });
 }
 
@@ -1633,6 +1647,27 @@ function closeOverlayWebSockets(overlayId, reason) {
   writeLog("info", "lab", `Cierre de WebSocket mock solicitado para Overlay ${overlayId}`, {
     reason,
     openBeforeClose: countOpenMockConnections(overlayId)
+  });
+}
+
+function destroyOverlayIframe(overlayId, reason) {
+  const frame = getOverlayFrame(overlayId);
+
+  frame?.remove();
+  clearOverlayConnections(overlayId, reason);
+
+  if (!state.overlays.instances[overlayId]) {
+    state.overlays.instances[overlayId] = {
+      id: overlayId,
+      hidden: true,
+      loaded: false
+    };
+  }
+
+  state.overlays.instances[overlayId].loaded = false;
+  writeLog("info", "lab", `Overlay ${overlayId} iframe destruido`, {
+    reason,
+    replayMode: state.worker.replayMode
   });
 }
 
@@ -2018,6 +2053,14 @@ function progressExpiredPrediction() {
   emitTwitchPredictionPayload(buildPredictionPayload("progress"));
 }
 
+function sendPredictionProgressWithCurrentVotes() {
+  syncPredictionFromControls();
+  ensurePredictionStarted();
+  setPredictionRuntimeStatus(getPredictionExpiredStatus(), "progress");
+  renderPredictionControls();
+  emitTwitchPredictionPayload(buildPredictionPayload("progress"));
+}
+
 function addVotesToOutcome(index) {
   syncPredictionFromControls();
   ensurePredictionStarted();
@@ -2386,8 +2429,10 @@ function emitTwitchPredictionPayload(payload) {
   const frames = getTargetFrames("active");
 
   if (frames.length === 0) {
-    writeLog("error", "lab", "Iframe no disponible");
-    return;
+    writeLog("warn", "lab", "No hay iframe activo disponible para twitch:eventsub; se mantiene la ruta Worker si aplica", {
+      hiddenDeliveryMode: state.overlays.hiddenDeliveryMode,
+      activeOverlay: state.overlays.activeId
+    });
   }
 
   for (const frame of frames) {
@@ -2640,7 +2685,8 @@ function sendWorkerPrediction(stage) {
 
 function postWorkerBroadcast(type, payload, label, options = {}) {
   const target = options.target || state.overlays.deliveryTarget || "all";
-  const openConnectionCount = countOpenMockConnections(target);
+  const targetFrameResult = getTargetFrameResult(target);
+  const openConnectionCount = countOpenMockConnections(target, { respectHiddenMode: true });
 
   if (isPredictionPayload(payload) && options.recordPrediction !== false) {
     recordPredictionPayload(payload, label);
@@ -2651,6 +2697,7 @@ function postWorkerBroadcast(type, payload, label, options = {}) {
       label,
       activeWidget: state.selectedWidget?.id || null,
       overlayTarget: target,
+      skippedHiddenOverlays: targetFrameResult.skippedHidden,
       workerUrl: state.worker.workerUrl,
       interceptWebSocket: state.worker.interceptWebSocket,
       expectedIntercept: "Worker mock intercepts WebSocket URLs containing /ws or the configured Worker URL.",
@@ -2668,6 +2715,7 @@ function postWorkerBroadcast(type, payload, label, options = {}) {
     timestamp: new Date().toISOString(),
     channel: "Worker WebSocket",
     overlayTarget: target,
+    skippedHiddenOverlays: targetFrameResult.skippedHidden,
     summary: summarizeWorkerPayload(payload),
     openMockWebSockets: openConnectionCount,
     currentPredictionStatus: state.prediction.currentPredictionStatus,
@@ -2676,7 +2724,7 @@ function postWorkerBroadcast(type, payload, label, options = {}) {
 }
 
 function postToWidgetFrames(message, options = {}) {
-  const frames = getTargetFrames(options.target || "all");
+  const { frames } = getTargetFrameResult(options.target || "all");
 
   for (const frame of frames) {
     frame.contentWindow?.postMessage(message, "*");
@@ -2684,27 +2732,57 @@ function postToWidgetFrames(message, options = {}) {
 }
 
 function getTargetFrames(target = "all") {
-  if (target === "all") {
-    return Array.from(document.querySelectorAll("iframe[data-overlay-id]"));
-  }
-
-  if (target === "active") {
-    return [getOverlayFrame(state.overlays.activeId)].filter(Boolean);
-  }
-
-  return [getOverlayFrame(target)].filter(Boolean);
+  return getTargetFrameResult(target).frames;
 }
 
-function countOpenMockConnections(target = "all") {
-  if (target === "all") {
-    return state.worker.openConnections.size;
+function getTargetFrameResult(target = "all") {
+  const overlayIds = getTargetOverlayIds(target);
+  const frames = [];
+  const skippedHidden = [];
+
+  for (const overlayId of overlayIds) {
+    const instance = state.overlays.instances[overlayId];
+    const frame = getOverlayFrame(overlayId);
+
+    if (!frame) {
+      continue;
+    }
+
+    if (state.overlays.hiddenDeliveryMode === "skip" && instance?.hidden) {
+      skippedHidden.push(overlayId);
+      continue;
+    }
+
+    frames.push(frame);
   }
 
-  const overlayId = target === "active" ? state.overlays.activeId : target;
+  return { frames, skippedHidden };
+}
+
+function getTargetOverlayIds(target = "all", options = {}) {
+  let overlayIds;
+
+  if (target === "all") {
+    overlayIds = ["A", "B"].filter((id) => state.overlays.instances[id]);
+  } else if (target === "active") {
+    overlayIds = [state.overlays.activeId];
+  } else {
+    overlayIds = [target];
+  }
+
+  if (!options.respectHiddenMode || state.overlays.hiddenDeliveryMode !== "skip") {
+    return overlayIds;
+  }
+
+  return overlayIds.filter((overlayId) => !state.overlays.instances[overlayId]?.hidden);
+}
+
+function countOpenMockConnections(target = "all", options = {}) {
+  const overlayIds = getTargetOverlayIds(target, options);
   let count = 0;
 
   for (const connection of state.worker.openConnections.values()) {
-    if (connection.overlayId === overlayId) {
+    if (overlayIds.includes(connection.overlayId)) {
       count += 1;
     }
   }
@@ -2881,6 +2959,7 @@ function buildIframeDocument({ manifest, html, css, script, fieldsSchema, fieldD
   const bridgeScript = `
 (() => {
   const source = ${JSON.stringify(WIDGET_SOURCE)};
+  const overlayId = ${JSON.stringify(overlayId || "A")};
   const safeValue = (value) => {
     if (typeof value === "undefined") {
       return undefined;
@@ -2897,7 +2976,7 @@ function buildIframeDocument({ manifest, html, css, script, fieldsSchema, fieldD
     }
   };
   const send = (type, payload = {}) => {
-    parent.postMessage({ source, type, ...payload }, "*");
+    parent.postMessage({ source, type, overlayId, ...payload }, "*");
   };
   const formatArg = (arg) => {
     if (typeof arg === "string") {
@@ -3020,7 +3099,8 @@ function handleWidgetMessage(event) {
   }
 
   if (data.type === "LOG") {
-    writeLog(data.level || "log", "widget", data.message || "", data.data);
+    const prefix = data.overlayId ? `[${data.overlayId}] ` : "";
+    writeLog(data.level || "log", "widget", `${prefix}${data.message || ""}`, data.data);
   } else if (data.type === "WORKER_WS_LOG") {
     appendWorkerConnectionLog(data.entry || {});
   }
